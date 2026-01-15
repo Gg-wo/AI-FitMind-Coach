@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitMind AI Coach</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
+
+    <!-- Local Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="bg-pattern"></div>
+
+<header>
+    <div class="container">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <h1>FitMind AI Coach</h1>
+                    <p style="font-size: 13px; color: var(--text-muted); margin-top: -4px;">Your Intelligent Training Partner</p>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-badge">
+                    <div class="stat-value" id="totalWorkouts">0</div>
+                    <div class="stat-label">Workouts</div>
+                </div>
+                <div class="stat-badge">
+                    <div class="stat-value" id="weeklyMinutes">0</div>
+                    <div class="stat-label">This Week</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="container">
+    <div class="main-content">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('live')">🏃 Live Session</div>
+            <div class="tab" onclick="switchTab('coach')">🤖 AI Coach</div>
+            <div class="tab" onclick="switchTab('history')">📊 History</div>
+            <div class="tab" onclick="switchTab('about')">ℹ️ About</div>
+        </div>
+
+        <!-- Live Session Tab -->
+        <div class="tab-content active" id="live-tab">
+            <div class="card">
+                <h2>🏃 Start Workout</h2>
+                <div class="workout-controls">
+                    <div class="workout-type">
+                        <select id="workoutType">
+                            <option value="running">🏃 Running</option>
+                            <option value="cycling">🚴 Cycling</option>
+                            <option value="swimming">🏊 Swimming</option>
+                            <option value="strength">💪 Strength Training</option>
+                            <option value="yoga">🧘 Yoga</option>
+                            <option value="hiit">⚡ HIIT</option>
+                        </select>
+                    </div>
+                    <button id="startBtn" onclick="startWorkout()">Start Session</button>
+                    <button id="stopBtn" onclick="stopWorkout()" style="display: none;" class="danger">Stop Session</button>
+                </div>
+
+                <div id="workoutStatus"></div>
+
+                <div id="liveMetrics" style="display: none;">
+                    <h3>Live Metrics</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Heart Rate</div>
+                            <div class="metric-value" id="currentHR">--</div>
+                            <div class="metric-unit">bpm</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Duration</div>
+                            <div class="metric-value" id="duration">0:00</div>
+                            <div class="metric-unit">min</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Avg HR</div>
+                            <div class="metric-value" id="avgHR">--</div>
+                            <div class="metric-unit">bpm</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Calories</div>
+                            <div class="metric-value" id="calories">0</div>
+                            <div class="metric-unit">kcal</div>
+                        </div>
+                    </div>
+
+                    <div class="zones-container">
+                        <h3>Heart Rate Zones</h3>
+                        <div class="zone-bar">
+                            <div class="zone" id="zone1" style="background-color: var(--zone1);">Z1</div>
+                            <div class="zone" id="zone2" style="background-color: var(--zone2);">Z2</div>
+                            <div class="zone" id="zone3" style="background-color: var(--zone3);">Z3</div>
+                            <div class="zone" id="zone4" style="background-color: var(--zone4);">Z4</div>
+                            <div class="zone" id="zone5" style="background-color: var(--zone5);">Z5</div>
+                        </div>
+                        <div class="zone-legend">
+                            <div class="zone-item">
+                                <div class="zone-color" style="background-color: var(--zone1);"></div>
+                                <span>Z1: Recovery (50-60%)</span>
+                            </div>
+                            <div class="zone-item">
+                                <div class="zone-color" style="background-color: var(--zone2);"></div>
+                                <span>Z2: Endurance (60-70%)</span>
+                            </div>
+                            <div class="zone-item">
+                                <div class="zone-color" style="background-color: var(--zone3);"></div>
+                                <span>Z3: Tempo (70-80%)</span>
+                            </div>
+                            <div class="zone-item">
+                                <div class="zone-color" style="background-color: var(--zone4);"></div>
+                                <span>Z4: Threshold (80-90%)</span>
+                            </div>
+                            <div class="zone-item">
+                                <div class="zone-color" style="background-color: var(--zone5);"></div>
+                                <span>Z5: Max (90-100%)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <canvas id="hrChart"></canvas>
+                    </div>
+
+                    <button onclick="getRealtimeCoaching()" style="width: 100%;">Get AI Coaching Feedback</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Coach Tab -->
+        <div class="tab-content" id="coach-tab">
+            <div class="card">
+                <h2>🤖 AI Coach Insights</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 24px;">Get personalized training recommendations based on your workout data and goals.</p>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: var(--text-secondary);">What would you like to know?</label>
+                    <input type="text" id="coachQuestion" placeholder="E.g., How can I improve my endurance?" style="margin-bottom: 12px;">
+                    <button onclick="askCoach()" style="width: 100%;">Ask AI Coach</button>
+                </div>
+
+                <div id="coachResponses"></div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div class="tab-content" id="history-tab">
+            <div class="card">
+                <h2>📊 Workout History</h2>
+                <div id="historyList"></div>
+            </div>
+        </div>
+
+        <!-- About Tab -->
+        <div class="tab-content" id="about-tab">
+            <div class="card">
+                <h2>ℹ️ About This Project</h2>
+                <h3>LLM-Powered Virtual Personal Coach</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                    This is a demonstration of an AI-powered fitness coaching system that combines real-time wearable data
+                    with large language models to provide intelligent, personalized training guidance.
+                </p>
+
+                <h3>Key Features</h3>
+                <ul style="color: var(--text-secondary); margin-bottom: 20px; line-height: 2;">
+                    <li><strong style="color: var(--accent-primary);">Real-time HR Monitoring:</strong> Simulated heart rate tracking with zone-based training</li>
+                    <li><strong style="color: var(--accent-primary);">AI Coaching:</strong> LLM-powered personalized feedback and recommendations</li>
+                    <li><strong style="color: var(--accent-primary);">Smart Analytics:</strong> Workout history tracking and performance analysis</li>
+                    <li><strong style="color: var(--accent-primary);">Overtraining Prevention:</strong> Intelligent recovery suggestions based on training load</li>
+                    <li><strong style="color: var(--accent-primary);">Multi-Sport Support:</strong> Running, cycling, swimming, strength, yoga, and HIIT</li>
+                </ul>
+
+                <h3>Technology Stack</h3>
+                <ul style="color: var(--text-secondary); margin-bottom: 20px; line-height: 2;">
+                    <li><strong style="color: var(--accent-primary);">Frontend:</strong> HTML5, CSS3, JavaScript (Vanilla)</li>
+                    <li><strong style="color: var(--accent-primary);">AI/LLM:</strong> Claude-Sonnet-4.5 via Poe Embed API</li>
+                    <li><strong style="color: var(--accent-primary);">Visualization:</strong> Chart.js for real-time data visualization</li>
+                    <li><strong style="color: var(--accent-primary);">Data Simulation:</strong> Realistic heart rate and sensor data modeling</li>
+                </ul>
+
+                <h3>Project Details</h3>
+                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px; color: var(--text-secondary); line-height: 2;">
+                    <p><strong style="color: var(--accent-primary);">Category:</strong> Mobile Applications / AIoT</p>
+                    <p><strong style="color: var(--accent-primary);">Type:</strong> Final Year Project (FYP)</p>
+                    <p><strong style="color: var(--accent-primary);">Target Students:</strong> COMP/CPEG/+AI</p>
+                    <p><strong style="color: var(--accent-primary);">Team Size:</strong> 2-4 students</p>
+                    <p><strong style="color: var(--accent-primary);">Skills:</strong> AI, Mobile Computing, AIoT, Wearable Integration</p>
+                </div>
+
+                <h3 style="margin-top: 24px;">How It Works</h3>
+                <ol style="color: var(--text-secondary); margin-bottom: 20px; line-height: 2;">
+                    <li>Start a workout session and select your activity type</li>
+                    <li>The system simulates real-time heart rate data (in production, this would connect to actual wearables)</li>
+                    <li>Monitor your performance across five heart rate training zones</li>
+                    <li>Request AI coaching feedback during or after your workout</li>
+                    <li>The LLM analyzes your metrics and provides personalized guidance</li>
+                    <li>Review workout history and track your progress over time</li>
+                </ol>
+
+                <h3>Future Enhancements</h3>
+                <ul style="color: var(--text-secondary); line-height: 2;">
+                    <li>Integration with real smartwatch APIs (Apple Watch, Garmin, Fitbit)</li>
+                    <li>Advanced motion sensor analysis for form correction</li>
+                    <li>Personalized training plan generation</li>
+                    <li>Social features and community challenges</li>
+                    <li>Nutrition tracking and recommendations</li>
+                    <li>Sleep and recovery monitoring</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Local Logic -->
+<script src="app.js"></script>
+</body>
+</html>
