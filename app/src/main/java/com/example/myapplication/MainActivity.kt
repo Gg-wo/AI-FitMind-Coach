@@ -1,5 +1,6 @@
 package com.example.myapplication
 import android.os.Bundle
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -14,6 +15,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import android.webkit.WebChromeClient
+import androidx.webkit.WebViewAssetLoader
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +36,10 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
+                val assetLoader = WebViewAssetLoader.Builder()
+                    .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
+                    .build()
+
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
 
@@ -43,13 +49,18 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
                 // CRITICAL: This allows alert() dialogs to work (used in stopWorkout)
                 webChromeClient = WebChromeClient()
 
-                webViewClient = WebViewClient()
+                webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView,
+                        request: WebResourceRequest
+                    ) = assetLoader.shouldInterceptRequest(request.url)
+                }
 
                 // Enable debugging so you can inspect via Chrome on your PC
                 // (Open chrome://inspect in your desktop browser while app runs)
                 WebView.setWebContentsDebuggingEnabled(true)
 
-                loadUrl("file:///android_asset/index.html")
+                loadUrl("https://appassets.androidplatform.net/assets/index.html")
             }
         }
     )

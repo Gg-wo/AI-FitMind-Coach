@@ -41,10 +41,10 @@ async function loadResearchData() {
         researchDataset = await response.json();
         console.log(`✓ Loaded ${researchDataset.totalSessions} real research sessions`);
         console.log(`  Data source: ${researchDataset.dataSource}`);
-        console.log(`  Citation: ${researchDataset.citation}`);
+        console.log(`  Citation: ${researchDataset.citation || researchDataset.citations?.[0] || 'N/A'}`);
         return researchDataset;
     } catch (error) {
-        console.warn('Could not load research data, falling back to simulation:', error);
+        console.warn('Could not load research data:', error);
         return null;
     }
 }
@@ -191,8 +191,13 @@ function updateZones(currentHR) {
 }
 
 // Start workout
-function startWorkout() {
+async function startWorkout() {
     const workoutType = document.getElementById('workoutType').value;
+
+    // Ensure research data is loaded before starting
+    if (!researchDataset) {
+        await loadResearchData();
+    }
 
     workoutActive = true;
     workoutStartTime = Date.now();
@@ -203,7 +208,7 @@ function startWorkout() {
     const researchSession = getResearchSession(workoutType);
     
     if (!researchSession) {
-        showAlert('Error: No research data available for this activity type. Please try again later.');
+        showAlert('Error: Research data is not loaded yet. Please wait a moment and try again.');
         return;
     }
     
