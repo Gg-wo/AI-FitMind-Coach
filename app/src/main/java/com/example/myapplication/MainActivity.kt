@@ -22,10 +22,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-// Load the WebViewScreen with DOM storage enabled.
-                    WebViewScreen(modifier = Modifier.padding(innerPadding))
-                }
+                WebViewScreen(modifier = Modifier.fillMaxSize())
             }
         }
     }

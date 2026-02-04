@@ -35,6 +35,11 @@
     box-sizing: border-box;
 }
 
+html, body {
+    min-height: 100vh;
+    height: 100%;
+}
+
 body {
     font-family: 'Outfit', sans-serif;
     background: var(--bg-primary);
@@ -165,6 +170,7 @@ header {
     position: relative;
     z-index: 5;
     margin-top: 30px;
+    min-height: calc(100vh - 200px);
 }
 
 .tabs {
@@ -208,6 +214,7 @@ header {
 .tab-content {
     display: none;
     animation: fadeIn 0.5s ease-out;
+    min-height: 60vh;
 }
 
 .tab-content.active {
@@ -379,11 +386,14 @@ button.danger {
 
 .zone-bar {
     display: flex;
-    height: 40px;
-    border-radius: 10px;
+    height: 50px;
+    border-radius: 12px;
     overflow: hidden;
     margin-bottom: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    gap: 2px;
+    background: var(--bg-primary);
+    padding: 2px;
 }
 
 .zone {
@@ -391,24 +401,39 @@ button.danger {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
-    font-size: 14px;
+    font-weight: 700;
+    font-size: 16px;
     color: rgba(0, 0, 0, 0.8);
-    transition: all 0.3s ease;
+    transition: all 0.4s ease;
     cursor: pointer;
+    border-radius: 8px;
+    position: relative;
+    opacity: 0.6;
 }
 
 .zone:hover {
     filter: brightness(1.2);
+    opacity: 0.8;
 }
 
 .zone.active {
-    animation: zoneActive 1s ease-in-out infinite;
+    transform: scale(1.1);
+    opacity: 1;
+    z-index: 10;
+    box-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+    animation: zonePulse 1.5s ease-in-out infinite;
+    font-size: 20px;
 }
 
-@keyframes zoneActive {
-    0%, 100% { filter: brightness(1); }
-    50% { filter: brightness(1.3); }
+@keyframes zonePulse {
+    0%, 100% { 
+        box-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+        transform: scale(1.1);
+    }
+    50% { 
+        box-shadow: 0 0 30px currentColor, 0 0 60px currentColor;
+        transform: scale(1.15);
+    }
 }
 
 .zone-legend {

@@ -25,6 +25,10 @@ let currentDataIndex = 0;    // Current position in playback
 const MAX_HR = 190; // Example max heart rate
 const REST_HR = 65;
 
+// OpenRouter API Configuration
+const OPENROUTER_API_KEY = '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';  // Replace with your actual API key
+const OPENROUTER_MODEL = 'meta-llama/llama-3.1-70b-instruct';  // Fast & free tier friendly
+
 // ============================================================
 // DATA LOADING & MANAGEMENT - Real Research Data
 // ============================================================
@@ -130,16 +134,64 @@ function initChart() {
                 backgroundColor: 'rgba(0, 212, 255, 0.1)',
                 tension: 0.4,
                 fill: true,
-                pointRadius: 2,
-                pointHoverRadius: 5
+                pointRadius: 0,  // No dots by default
+                pointHoverRadius: 8,  // Show big dot on hover
+                pointBackgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--accent-primary'),
+                pointBorderColor: '#fff',
+                pointBorderWidth: 3,
+                pointHoverBackgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--accent-primary'),
+                pointHoverBorderColor: '#fff',
+                pointHoverBorderWidth: 3
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false  // Show tooltip when hovering anywhere on chart
+            },
             plugins: {
                 legend: {
-                    display: false
+                    display: true,
+                    onClick: null,  // Disable clicking to hide/show dataset
+                    labels: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary'),
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent-primary'),
+                    borderWidth: 2,
+                    padding: 12,
+                    displayColors: true,
+                    callbacks: {
+                        title: function(context) {
+                            return '🕐 Time: ' + context[0].label;
+                        },
+                        label: function(context) {
+                            return '❤️ Heart Rate: ' + context.parsed.y + ' bpm';
+                        },
+                        afterLabel: function(context) {
+                            const hr = context.parsed.y;
+                            const zone = getHRZone(hr);
+                            const zoneNames = {
+                                1: 'Zone 1: Recovery',
+                                2: 'Zone 2: Endurance',
+                                3: 'Zone 3: Tempo',
+                                4: 'Zone 4: Threshold',
+                                5: 'Zone 5: Maximum'
+                            };
+                            return '📊 ' + zoneNames[zone];
+                        }
+                    }
                 }
             },
             scales: {
@@ -147,19 +199,46 @@ function initChart() {
                     beginAtZero: false,
                     min: 50,
                     max: 200,
+                    title: {
+                        display: true,
+                        text: '❤️ Heart Rate (bpm)',
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary'),
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.05)'
                     },
                     ticks: {
-                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary'),
+                        font: {
+                            size: 12
+                        }
                     }
                 },
                 x: {
+                    title: {
+                        display: true,
+                        text: '🕐 Time',
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary'),
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
                     grid: {
                         color: 'rgba(255, 255, 255, 0.05)'
                     },
                     ticks: {
-                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary'),
+                        font: {
+                            size: 12
+                        },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 10
                     }
                 }
             }
@@ -180,6 +259,17 @@ function getHRZone(hr) {
 // Update zone indicators
 function updateZones(currentHR) {
     const zone = getHRZone(currentHR);
+    
+    // Zone descriptions and colors
+    const zoneInfo = {
+        1: { name: 'Zone 1: Recovery', color: 'var(--zone1)', bg: 'rgba(74, 222, 128, 0.2)' },
+        2: { name: 'Zone 2: Endurance', color: 'var(--zone2)', bg: 'rgba(251, 191, 36, 0.2)' },
+        3: { name: 'Zone 3: Tempo', color: 'var(--zone3)', bg: 'rgba(251, 146, 60, 0.2)' },
+        4: { name: 'Zone 4: Threshold', color: 'var(--zone4)', bg: 'rgba(248, 113, 113, 0.2)' },
+        5: { name: 'Zone 5: Maximum', color: 'var(--zone5)', bg: 'rgba(220, 38, 38, 0.2)' }
+    };
+    
+    // Update zone bar
     for (let i = 1; i <= 5; i++) {
         const zoneEl = document.getElementById(`zone${i}`);
         if (i === zone) {
@@ -187,6 +277,17 @@ function updateZones(currentHR) {
         } else {
             zoneEl.classList.remove('active');
         }
+    }
+    
+    // Update current zone text
+    const zoneText = document.getElementById('currentZoneText');
+    if (zoneText) {
+        const info = zoneInfo[zone];
+        zoneText.textContent = `📍 Currently in ${info.name}`;
+        zoneText.style.display = 'block';
+        zoneText.style.color = info.color;
+        zoneText.style.backgroundColor = info.bg;
+        zoneText.style.border = `2px solid ${info.color}`;
     }
 }
 
@@ -270,10 +371,28 @@ function updateWorkoutMetrics() {
         hrChart.data.labels.push(timeLabel);
         hrChart.data.datasets[0].data.push(currentHR);
 
-        // Keep only last 60 data points
-        if (hrChart.data.labels.length > 60) {
-            hrChart.data.labels.shift();
-            hrChart.data.datasets[0].data.shift();
+        // Keep all data points from start to finish - no limit
+        // Smart time label intervals based on workout duration
+        const totalPoints = hrChart.data.labels.length;
+        const totalMinutes = elapsed / 60;
+        
+        let intervalMinutes;
+        if (totalMinutes < 10) {
+            intervalMinutes = 1; // Show every minute for short workouts
+        } else if (totalMinutes < 30) {
+            intervalMinutes = 3; // Every 3 minutes for 10-30 min workouts
+        } else if (totalMinutes < 60) {
+            intervalMinutes = 5; // Every 5 minutes for 30-60 min workouts
+        } else {
+            intervalMinutes = 10; // Every 10 minutes for 1+ hour workouts
+        }
+        
+        const intervalSeconds = intervalMinutes * 60;
+        const maxTicksLimit = Math.ceil(totalMinutes / intervalMinutes) + 1;
+        
+        // Update x-axis tick settings dynamically
+        if (hrChart.options.scales.x.ticks) {
+            hrChart.options.scales.x.ticks.maxTicksLimit = Math.max(5, Math.min(maxTicksLimit, 15));
         }
 
         hrChart.update('none');
@@ -389,25 +508,9 @@ Provide:
 Keep it concise and actionable.`;
 
     try {
-        window.Poe.registerHandler('realtime-coach-handler', (result) => {
-            const msg = result.responses[0];
-            if (msg.status === 'error') {
-                coachDiv.innerHTML = '';
-                coachDiv.appendChild(createCoachMessage('Error: ' + msg.statusText, false));
-            } else if (msg.status === 'incomplete') {
-                coachDiv.innerHTML = '';
-                coachDiv.appendChild(createCoachMessage(msg.content, false));
-            } else if (msg.status === 'complete') {
-                coachDiv.innerHTML = '';
-                coachDiv.appendChild(createCoachMessage(msg.content, false));
-            }
-        });
-
-        await window.Poe.sendUserMessage(`@Claude-Sonnet-4.5 ${prompt}`, {
-            handler: 'realtime-coach-handler',
-            stream: true,
-            openChat: false
-        });
+        const response = await callOpenRouterAPI(prompt);
+        coachDiv.innerHTML = '';
+        coachDiv.appendChild(createCoachMessage(response, false));
     } catch (err) {
         coachDiv.innerHTML = '';
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
@@ -444,29 +547,56 @@ User's Question: ${question}
 Provide a detailed, personalized response with actionable advice.`;
 
     try {
-        window.Poe.registerHandler('coach-handler', (result) => {
-            const msg = result.responses[0];
-            if (msg.status === 'error') {
-                coachDiv.innerHTML = '';
-                coachDiv.appendChild(createCoachMessage('Error: ' + msg.statusText, false));
-            } else if (msg.status === 'incomplete') {
-                coachDiv.innerHTML = '';
-                coachDiv.appendChild(createCoachMessage(msg.content, false));
-            } else if (msg.status === 'complete') {
-                coachDiv.innerHTML = '';
-                coachDiv.appendChild(createCoachMessage(msg.content, false));
-            }
-        });
-
-        await window.Poe.sendUserMessage(`@Claude-Sonnet-4.5 ${prompt}`, {
-            handler: 'coach-handler',
-            stream: true,
-            openChat: false
-        });
+        const response = await callOpenRouterAPI(prompt);
+        coachDiv.innerHTML = '';
+        coachDiv.appendChild(createCoachMessage(response, false));
+        
+        // Clear the input field after successful response
+        document.getElementById('coachQuestion').value = '';
     } catch (err) {
         coachDiv.innerHTML = '';
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
     }
+}
+
+// Call OpenRouter API
+async function callOpenRouterAPI(prompt) {
+    if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'YOUR_API_KEY_HERE') {
+        throw new Error('Please set your OpenRouter API key in the app.js file');
+    }
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://github.com/Gg-wo/MyApplication',  // Your GitHub repo
+            'X-Title': 'FitMind AI Coach'  // Your app name
+        },
+        body: JSON.stringify({
+            model: OPENROUTER_MODEL,
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are an expert AI fitness coach specializing in personalized training advice, heart rate zone analysis, and workout optimization. Provide clear, actionable, and encouraging guidance.'
+                },
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: 500
+        })
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to get AI response');
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
 }
 
 // Create coach message element
@@ -480,7 +610,7 @@ function createCoachMessage(content, isLoading) {
         <div class="coach-avatar">🤖</div>
         <div>
             <strong>AI Coach</strong>
-            <div style="font-size: 12px; color: var(--text-muted);">Powered by Claude-Sonnet-4.5</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Powered by Llama 3.1 70B</div>
         </div>
     `;
 
