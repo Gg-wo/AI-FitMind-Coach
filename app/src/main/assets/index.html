@@ -16,6 +16,7 @@
 
     <!-- Local Styles -->
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:,">
 </head>
 <body>
 <div class="bg-pattern"></div>
@@ -147,16 +148,26 @@
         <!-- AI Coach Tab -->
         <div class="tab-content" id="coach-tab">
             <div class="card">
-                <h2>🤖 AI Coach Insights</h2>
+                <div id="originalChatControls" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button id="sidebarBtn" onclick="event.stopPropagation(); toggleChatSidebar()" style="padding: 8px 12px; font-size: 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); cursor: pointer; border-radius: 8px;" title="View all chats">
+                            ☰
+                        </button>
+                        <button id="newChatBtn" onclick="startNewChat()" style="padding: 8px 16px; font-size: 14px; background: var(--accent-primary); border: none; color: white; font-weight: 600; cursor: pointer; border-radius: 8px;">
+                            ✨ New Chat
+                        </button>
+                    </div>
+                    <h2 style="margin: 0;">🤖 AI Coach</h2>
+                </div>
                 <p style="color: var(--text-secondary); margin-bottom: 24px;">Get personalized training recommendations based on your workout data and goals.</p>
 
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 8px; color: var(--text-secondary);">What would you like to know?</label>
-                    <input type="text" id="coachQuestion" placeholder="E.g., How can I improve my endurance?" style="margin-bottom: 12px;">
+                    <input type="text" id="coachQuestion" placeholder="E.g., How can I improve my endurance?" style="margin-bottom: 12px;" onkeypress="if(event.key === 'Enter') askCoach()">
                     <button onclick="askCoach()" style="width: 100%;">Ask AI Coach</button>
                 </div>
 
-                <div id="coachResponses"></div>
+                <div id="coachResponses" style="max-height: 500px; overflow-y: auto;"></div>
             </div>
         </div>
 
@@ -236,9 +247,36 @@
                     <li>Nutrition tracking and recommendations</li>
                     <li>Sleep and recovery monitoring</li>
                 </ul>
+
+                <h3 style="margin-top: 24px;">Data Management</h3>
+                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px;">
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                        💾 Your workout history and chat conversations are automatically saved to your device using localStorage. 
+                        Data persists across app restarts.
+                    </p>
+                    <button onclick="if(confirm('Clear all workout history and chat data? This cannot be undone!')) { clearAllStoredData(); showAlert('All data cleared successfully!'); }" 
+                            style="background: var(--error-color); border: none; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; width: 100%;">
+                        🗑️ Clear All Stored Data
+                    </button>
+                    <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px; text-align: center;">
+                        Use this to reset the app or free up storage space
+                    </p>
+                </div>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Chat Sidebar Backdrop (outside tabs so always accessible) -->
+<div id="chatSidebarBackdrop" class="chat-sidebar-backdrop" onclick="toggleChatSidebar()"></div>
+
+<!-- Chat Sidebar (outside tabs so always accessible) -->
+<div id="chatSidebar" class="chat-sidebar">
+    <div class="chat-sidebar-header">
+        <h3 style="margin: 0; font-size: 16px;">💬 Your Chats</h3>
+        <button onclick="toggleChatSidebar()" style="background: none; border: none; font-size: 24px; padding: 0; cursor: pointer; color: var(--text-primary);">×</button>
+    </div>
+    <div id="chatList" class="chat-list"></div>
 </div>
 
 <!-- Local Logic -->

@@ -17,9 +17,19 @@ let workoutInterval = null;
 let hrChart = null;
 let hrData = [];
 let workoutHistory = [];
+let chatSessions = [];  // Array of chat session objects
+let currentChatId = null;  // ID of currently active chat session
 let currentWorkout = null;
 let researchDataset = null;  // Real research data from WESAD
 let currentDataIndex = 0;    // Current position in playback
+
+// LocalStorage Keys
+const STORAGE_KEYS = {
+    WORKOUT_HISTORY: 'fitmind_workout_history',
+    CHAT_SESSIONS: 'fitmind_chat_sessions',
+    CURRENT_CHAT_ID: 'fitmind_current_chat_id',
+    USER_PROFILE: 'fitmind_user_profile'
+};
 
 // Constants
 const MAX_HR = 190; // Example max heart rate
@@ -28,6 +38,239 @@ const REST_HR = 65;
 // OpenRouter API Configuration
 const OPENROUTER_API_KEY = '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';  // Replace with your actual API key
 const OPENROUTER_MODEL = 'meta-llama/llama-3.1-70b-instruct';  // Fast & free tier friendly
+
+// ============================================================
+// LOCAL STORAGE MANAGEMENT
+// ============================================================
+
+/**
+ * Save workout history to localStorage
+ */
+function saveWorkoutHistory() {
+    try {
+        localStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(workoutHistory));
+        console.log('✓ Saved workout history:', workoutHistory.length, 'workouts');
+    } catch (error) {
+        console.error('Failed to save workout history:', error);
+        showAlert('Warning: Failed to save workout data');
+    }
+}
+
+/**
+ * Load workout history from localStorage
+ */
+function loadWorkoutHistory() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
+        if (saved) {
+            workoutHistory = JSON.parse(saved);
+            console.log('✓ Loaded workout history:', workoutHistory.length, 'workouts');
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to load workout history:', error);
+    }
+    return false;
+}
+
+/**
+ * Save all chat sessions to localStorage
+ */
+function saveChatSessions() {
+    try {
+        localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(chatSessions));
+        localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, currentChatId || '');
+        console.log('✓ Saved chat sessions:', chatSessions.length, 'sessions');
+    } catch (error) {
+        console.error('Failed to save chat sessions:', error);
+    }
+}
+
+/**
+ * Load all chat sessions from localStorage
+ */
+function loadChatSessions() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
+        const savedChatId = localStorage.getItem(STORAGE_KEYS.CURRENT_CHAT_ID);
+        if (saved) {
+            chatSessions = JSON.parse(saved);
+            currentChatId = savedChatId || null;
+            console.log('✓ Loaded chat sessions:', chatSessions.length, 'sessions');
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to load chat sessions:', error);
+    }
+    return false;
+}
+
+/**
+ * Create a new chat session
+ */
+function createNewChatSession() {
+    const newSession = {
+        id: 'chat_' + Date.now(),
+        title: 'New Chat',
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    chatSessions.unshift(newSession);
+    currentChatId = newSession.id;
+    saveChatSessions();
+    renderChatSidebar();
+    renderChatHistory();
+    return newSession;
+}
+
+/**
+ * Switch to a different chat session
+ */
+function switchChatSession(chatId) {
+    currentChatId = chatId;
+    localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, chatId);
+    renderChatHistory();
+    renderChatSidebar();
+}
+
+/**
+ * Delete a chat session
+ */
+/**
+ * Delete a chat session
+ */
+function deleteChatSession(chatId) {
+    console.log('🗑️ DELETE CALLED with chatId:', chatId);
+    console.log('📋 Current chatSessions BEFORE delete:', chatSessions.length, chatSessions.map(s => s.id));
+    console.log('🎯 Current active chat:', currentChatId);
+    
+    const index = chatSessions.findIndex(s => s.id === chatId);
+    console.log('🔍 Found at index:', index);
+    
+    if (index === -1) {
+        console.error('❌ Chat not found:', chatId);
+        return;
+    }
+    
+    // Remove from array
+    chatSessions.splice(index, 1);
+    console.log('✂️ Removed from array. Remaining:', chatSessions.length);
+    
+    // If deleting current chat, create a completely new one
+    if (currentChatId === chatId) {
+        console.log('⚠️ Deleting CURRENT chat!');
+        if (chatSessions.length > 0) {
+            // Switch to first available chat
+            currentChatId = chatSessions[0].id;
+            console.log('🔄 Switched to chat:', currentChatId);
+        } else {
+            // No chats left, create new one
+            console.log('➕ Creating new chat (no chats left)');
+            currentChatId = null;
+            createNewChatSession();
+        }
+    }
+    
+    // Save to localStorage
+    console.log('💾 Saving to localStorage...');
+    saveChatSessions();
+    
+    // Force re-render everything
+    console.log('🎨 Re-rendering sidebar and history...');
+    renderChatSidebar();
+    renderChatHistory();
+    
+    console.log('✅ Delete complete! Final chat count:', chatSessions.length);
+    console.log('📋 Final chatSessions:', chatSessions.map(s => s.id));
+    
+    // Close sidebar after deletion
+    console.log('🚪 Closing sidebar...');
+    toggleChatSidebar();
+}
+
+/**
+ * Get current chat session
+ */
+function getCurrentChatSession() {
+    return chatSessions.find(s => s.id === currentChatId);
+}
+
+/**
+ * Update chat session title based on first message
+ */
+function updateChatTitle(chatId) {
+    const session = chatSessions.find(s => s.id === chatId);
+    if (!session || session.messages.length === 0) return;
+    
+    // Use first user message as title (truncated)
+    const firstUserMsg = session.messages.find(m => m.role === 'user');
+    if (firstUserMsg && session.title === 'New Chat') {
+        session.title = firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '');
+        saveChatSessions();
+        renderChatSidebar();
+    }
+}
+
+/**
+ * Clear all stored data (for testing or user request)
+ */
+function clearAllStoredData() {
+    localStorage.removeItem(STORAGE_KEYS.WORKOUT_HISTORY);
+    localStorage.removeItem(STORAGE_KEYS.CHAT_SESSIONS);
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_CHAT_ID);
+    workoutHistory = [];
+    chatSessions = [];
+    currentChatId = null;
+    console.log('✓ Cleared all stored data');
+    updateHeaderStats();
+    renderHistory();
+    createNewChatSession();
+}
+
+/**
+ * Start a new chat session
+ */
+function startNewChat() {
+    // Check if current chat is empty
+    const currentSession = getCurrentChatSession();
+    if (currentSession && currentSession.messages.length === 0) {
+        console.log('⚠️ Cannot create new chat - current chat is empty. Please send at least one message first.');
+        showAlert('Please send at least one message in the current chat before starting a new one.');
+        document.getElementById('coachQuestion').focus();
+        return;
+    }
+    
+    console.log('✨ Creating new chat (current chat has', currentSession?.messages.length || 0, 'messages)');
+    createNewChatSession();
+    document.getElementById('coachQuestion').focus();
+}
+
+/**
+ * Toggle chat history modal visibility
+ */
+function toggleChatSidebar() {
+    const modal = document.getElementById('chatSidebar');
+    const backdrop = document.getElementById('chatSidebarBackdrop');
+    
+    if (!modal || !backdrop) {
+        console.error('Modal or backdrop element not found');
+        return;
+    }
+    
+    const isOpen = modal.classList.contains('open');
+    
+    if (isOpen) {
+        // Close modal
+        modal.classList.remove('open');
+        backdrop.classList.remove('open');
+    } else {
+        // Open modal
+        modal.classList.add('open');
+        backdrop.classList.add('open');
+        renderChatSidebar();
+    }
+}
 
 // ============================================================
 // DATA LOADING & MANAGEMENT - Real Research Data
@@ -456,6 +699,9 @@ function stopWorkout() {
         // Save to history
         currentWorkout.endTime = new Date().toISOString();
         workoutHistory.unshift(currentWorkout);
+        
+        // Save to localStorage
+        saveWorkoutHistory();
 
         // Reset UI
         document.getElementById('startBtn').style.display = 'inline-block';
@@ -525,9 +771,30 @@ async function askCoach() {
         return;
     }
 
+    // Ensure we have a chat session
+    if (!currentChatId || chatSessions.length === 0) {
+        createNewChatSession();
+    }
+
+    const currentSession = getCurrentChatSession();
+    if (!currentSession) return;
+
+    // Save user message to current chat session
+    const userMessage = {
+        role: 'user',
+        content: question,
+        timestamp: new Date().toISOString()
+    };
+    currentSession.messages.push(userMessage);
+    currentSession.updatedAt = new Date().toISOString();
+
     const coachDiv = document.getElementById('coachResponses');
+    
+    // Render chat history
+    renderChatHistory();
+    
+    // Add loading indicator
     const loadingMsg = createCoachMessage('Thinking...', true);
-    coachDiv.innerHTML = '';
     coachDiv.appendChild(loadingMsg);
 
     // Build context from workout history
@@ -547,22 +814,65 @@ User's Question: ${question}
 Provide a detailed, personalized response with actionable advice.`;
 
     try {
-        const response = await callOpenRouterAPI(prompt);
-        coachDiv.innerHTML = '';
-        coachDiv.appendChild(createCoachMessage(response, false));
+        const response = await callOpenRouterAPI(prompt, currentSession.messages);
         
-        // Clear the input field after successful response
+        // Save AI response to current chat session
+        const aiMessage = {
+            role: 'assistant',
+            content: response,
+            timestamp: new Date().toISOString()
+        };
+        currentSession.messages.push(aiMessage);
+        currentSession.updatedAt = new Date().toISOString();
+        
+        // Update chat title if first message
+        updateChatTitle(currentChatId);
+        
+        // Save to localStorage
+        saveChatSessions();
+        
+        // Re-render
+        renderChatHistory();
+        renderChatSidebar();
+        
+        // Clear input
         document.getElementById('coachQuestion').value = '';
     } catch (err) {
         coachDiv.innerHTML = '';
+        renderChatHistory();
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
     }
 }
 
-// Call OpenRouter API
-async function callOpenRouterAPI(prompt) {
+// Call OpenRouter API with conversation history support
+async function callOpenRouterAPI(prompt, conversationHistory = null) {
     if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'YOUR_API_KEY_HERE') {
         throw new Error('Please set your OpenRouter API key in the app.js file');
+    }
+
+    // Build messages array with system prompt and conversation context
+    const messages = [
+        {
+            role: 'system',
+            content: 'You are an expert AI fitness coach specializing in personalized training advice, heart rate zone analysis, and workout optimization. Provide clear, actionable, and encouraging guidance. Keep responses concise and focused.'
+        }
+    ];
+
+    // Add conversation history if provided (last 10 messages to keep context manageable)
+    if (conversationHistory && conversationHistory.length > 0) {
+        const recentHistory = conversationHistory.slice(-10);
+        messages.push(...recentHistory.map(msg => ({
+            role: msg.role,
+            content: msg.content
+        })));
+    }
+
+    // Add current prompt if not already in history
+    if (!conversationHistory) {
+        messages.push({
+            role: 'user',
+            content: prompt
+        });
     }
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -570,21 +880,12 @@ async function callOpenRouterAPI(prompt) {
         headers: {
             'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://github.com/Gg-wo/MyApplication',  // Your GitHub repo
-            'X-Title': 'FitMind AI Coach'  // Your app name
+            'HTTP-Referer': 'https://github.com/Gg-wo/MyApplication',
+            'X-Title': 'FitMind AI Coach'
         },
         body: JSON.stringify({
             model: OPENROUTER_MODEL,
-            messages: [
-                {
-                    role: 'system',
-                    content: 'You are an expert AI fitness coach specializing in personalized training advice, heart rate zone analysis, and workout optimization. Provide clear, actionable, and encouraging guidance.'
-                },
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
+            messages: messages,
             temperature: 0.7,
             max_tokens: 500
         })
@@ -597,6 +898,129 @@ async function callOpenRouterAPI(prompt) {
 
     const data = await response.json();
     return data.choices[0].message.content;
+}
+
+// Render chat history for current session
+function renderChatHistory() {
+    const coachDiv = document.getElementById('coachResponses');
+    coachDiv.innerHTML = '';
+    
+    const currentSession = getCurrentChatSession();
+    
+    if (!currentSession || currentSession.messages.length === 0) {
+        coachDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">💬 No conversation yet. Ask me anything about your fitness!</p>';
+        return;
+    }
+    
+    // Render each message in the current session
+    currentSession.messages.forEach(msg => {
+        if (msg.role === 'user') {
+            const userMsg = createUserMessage(msg.content);
+            coachDiv.appendChild(userMsg);
+        } else if (msg.role === 'assistant') {
+            const aiMsg = createCoachMessage(msg.content, false);
+            coachDiv.appendChild(aiMsg);
+        }
+    });
+    
+    // Scroll to bottom
+    coachDiv.scrollTop = coachDiv.scrollHeight;
+}
+
+// Render chat sidebar with list of sessions
+function renderChatSidebar() {
+    const sidebar = document.getElementById('chatSidebar');
+    const chatList = document.getElementById('chatList');
+    if (!sidebar || !chatList) {
+        console.error('❌ chatSidebar or chatList element not found');
+        return;
+    }
+    
+    console.log('📝 Rendering sidebar, chatSessions:', chatSessions.length);
+    
+    // Add header with close button if not present
+    if (!sidebar.querySelector('.chat-sidebar-header')) {
+        const header = document.createElement('div');
+        header.className = 'chat-sidebar-header';
+        header.innerHTML = `
+            <h3>💬 Chat History</h3>
+            <button class="chat-sidebar-close" onclick="toggleChatSidebar()" title="Close">✕</button>
+        `;
+        sidebar.insertBefore(header, chatList);
+    }
+    
+    chatList.innerHTML = '';
+    
+    if (chatSessions.length === 0) {
+        chatList.innerHTML = '<p style="color: var(--text-secondary); padding: 12px; text-align: center; font-size: 14px;">No chats yet</p>';
+        console.log('✅ Showing "No chats yet" message');
+        return;
+    }
+    
+    console.log('✅ Rendering', chatSessions.length, 'chat sessions');
+    
+    chatSessions.forEach(session => {
+        const item = document.createElement('div');
+        item.className = 'chat-item' + (session.id === currentChatId ? ' active' : '');
+        
+        const content = document.createElement('div');
+        content.className = 'chat-item-content';
+        content.onclick = () => {
+            switchChatSession(session.id);
+            toggleChatSidebar();
+        };
+        
+        const title = document.createElement('div');
+        title.className = 'chat-item-title';
+        title.textContent = session.title;
+        
+        const meta = document.createElement('div');
+        meta.className = 'chat-item-meta';
+        meta.textContent = `${session.messages.length} messages`;
+        
+        content.appendChild(title);
+        content.appendChild(meta);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'chat-delete-btn';
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.title = 'Delete chat';
+        deleteBtn.onclick = (e) => {
+            console.log('🖱️ Delete button CLICKED for session:', session.id);
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('📢 Showing confirm dialog...');
+            showConfirmDialog('Confirm to delete this chat?', () => {
+                console.log('✔️ User CONFIRMED deletion!');
+                deleteChatSession(session.id);
+            });
+            return false;
+        };
+        
+        item.appendChild(content);
+        item.appendChild(deleteBtn);
+        chatList.appendChild(item);
+    });
+}
+
+// Create user message element
+function createUserMessage(content) {
+    const div = document.createElement('div');
+    div.className = 'user-message';
+    div.style.cssText = 'background: rgba(0, 212, 255, 0.1); border-left: 3px solid var(--accent-primary); padding: 12px 16px; margin-bottom: 12px; border-radius: 8px;';
+    
+    const header = document.createElement('div');
+    header.style.cssText = 'font-weight: 600; color: var(--accent-primary); margin-bottom: 6px; font-size: 14px;';
+    header.textContent = '👤 You';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.style.cssText = 'color: var(--text-primary); line-height: 1.6;';
+    contentDiv.textContent = content;
+    
+    div.appendChild(header);
+    div.appendChild(contentDiv);
+    
+    return div;
 }
 
 // Create coach message element
@@ -733,16 +1157,40 @@ function showAlert(message) {
 function showConfirmDialog(message, onConfirm) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">Confirm</div>
-            <div class="modal-body">${message}</div>
-            <div class="modal-actions">
-                <button class="secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-                <button onclick="this.closest('.modal-overlay').remove(); (${onConfirm.toString()})()">Confirm</button>
-            </div>
-        </div>
-    `;
+    
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+    
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+    header.textContent = 'Confirm';
+    
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    body.textContent = message;
+    
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'secondary';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = () => modal.remove();
+    
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = 'Confirm';
+    confirmBtn.onclick = () => {
+        modal.remove();
+        onConfirm(); // Call the function directly with proper closure
+    };
+    
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    content.appendChild(header);
+    content.appendChild(body);
+    content.appendChild(actions);
+    modal.appendChild(content);
+    
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
@@ -752,13 +1200,43 @@ function showConfirmDialog(message, onConfirm) {
 // Initialize on load
 // Ensure DOM is ready before updating stats
 document.addEventListener('DOMContentLoaded', () => {
-    // Load real research data
-    loadResearchData().then(() => {
-        console.log('✓ Research data loaded successfully');
-    }).catch(err => {
-        console.warn('Note: Research data not available, app will use simulation', err);
-    });
+    console.log('🚀 FitMind AI Coach - Initializing...');
     
-    updateHeaderStats();
-    renderHistory();
+    try {
+        // Load stored data from localStorage
+        loadWorkoutHistory();
+        loadChatSessions();
+        
+        // Create default chat session if none exist
+        if (chatSessions.length === 0) {
+            createNewChatSession();
+        } else if (!currentChatId) {
+            currentChatId = chatSessions[0].id;
+        }
+        
+        // Load real research data
+        loadResearchData().then(() => {
+            console.log('✓ Research data loaded successfully');
+        }).catch(err => {
+            console.warn('Note: Research data not available, app will use simulation', err);
+        });
+        
+        // Update UI with loaded data
+        updateHeaderStats();
+        renderHistory();
+        renderChatHistory();
+        renderChatSidebar();
+        
+        console.log('✅ App initialized - Data persistence active');
+    } catch (error) {
+        console.error('❌ Initialization error:', error);
+        // Show error to user
+        document.body.innerHTML = `
+            <div style="padding: 20px; color: white; background: #dc2626; text-align: center;">
+                <h2>⚠️ Initialization Error</h2>
+                <p>${error.message}</p>
+                <button onclick="location.reload()" style="padding: 10px 20px; margin-top: 10px;">Reload App</button>
+            </div>
+        `;
+    }
 });
