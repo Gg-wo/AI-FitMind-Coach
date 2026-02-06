@@ -153,7 +153,7 @@
                         <button id="sidebarBtn" onclick="event.stopPropagation(); toggleChatSidebar()" style="padding: 8px 12px; font-size: 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); cursor: pointer; border-radius: 8px;" title="View all chats">
                             ☰
                         </button>
-                        <button id="newChatBtn" onclick="startNewChat()" style="padding: 8px 16px; font-size: 14px; background: var(--accent-primary); border: none; color: white; font-weight: 600; cursor: pointer; border-radius: 8px;">
+                        <button id="newChatBtn" onclick="startNewChat()" style="padding: 8px 16px; font-size: 14px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; color: white; font-weight: 600; cursor: pointer; border-radius: 8px;">
                             ✨ New Chat
                         </button>
                     </div>
@@ -254,9 +254,9 @@
                         💾 Your workout history and chat conversations are automatically saved to your device using localStorage. 
                         Data persists across app restarts.
                     </p>
-                    <button onclick="if(confirm('Clear all workout history and chat data? This cannot be undone!')) { clearAllStoredData(); showAlert('All data cleared successfully!'); }" 
-                            style="background: var(--error-color); border: none; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; width: 100%;">
-                        🗑️ Clear All Stored Data
+                        <button onclick="showConfirmDialog('Clear all workout history and chat data? This cannot be undone!', () => { clearAllStoredData(); showAlert('All data cleared successfully!'); })" 
+                            style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; width: 100%;">
+                         Clear Cache 🗑️
                     </button>
                     <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px; text-align: center;">
                         Use this to reset the app or free up storage space

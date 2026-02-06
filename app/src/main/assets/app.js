@@ -222,7 +222,7 @@ function clearAllStoredData() {
     workoutHistory = [];
     chatSessions = [];
     currentChatId = null;
-    console.log('✓ Cleared all stored data');
+    console.log('✓ Cleared Cache');
     updateHeaderStats();
     renderHistory();
     createNewChatSession();
@@ -719,46 +719,99 @@ function stopWorkout() {
 }
 
 // Get real-time coaching
-async function getRealtimeCoaching() {
-    if (!currentWorkout) return;
+async function getRealtimeCoaching(workout = null) {
+    // Use provided workout or current workout
+    const targetWorkout = workout || currentWorkout;
+    if (!targetWorkout) {
+        showAlert('No workout data available for feedback.');
+        return;
+    }
+
+    // Determine if this is real-time or historical
+    const isRealtime = targetWorkout === currentWorkout && workoutActive;
+    const feedbackType = isRealtime ? 'real-time' : 'post-workout';
+
+    // Ensure we have a chat session
+    if (isRealtime) {
+        if (!currentChatId || chatSessions.length === 0) {
+            createNewChatSession();
+        }
+    } else {
+        createNewChatSession();
+        const analysisDate = new Date(targetWorkout.startTime).toLocaleString();
+        const currentSession = getCurrentChatSession();
+        if (currentSession) {
+            currentSession.title = `Analysis - ${analysisDate}`;
+            currentSession.updatedAt = new Date().toISOString();
+            saveChatSessions();
+        }
+    }
+
+    const currentSession = getCurrentChatSession();
+    if (!currentSession) return;
 
     const coachDiv = document.getElementById('coachResponses');
-    const loadingMsg = createCoachMessage('Analyzing your workout data...', true);
-    coachDiv.innerHTML = '';
-    coachDiv.appendChild(loadingMsg);
 
+    // Switch to coach tab
     switchTab('coach');
-    
-    // Ensure the tab visual state is updated if switchTab doesn't catch it
     const coachTab = Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('AI Coach'));
     if(coachTab) {
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
         coachTab.classList.add('active');
     }
+    
+    // Build detailed workout data message with all metrics
+    const workoutDataDetails = `
+📊 Workout Analysis Request:
+- Type: ${targetWorkout.type.toUpperCase()}
+- Duration: ${formatDuration(targetWorkout.duration)}
+- Average Heart Rate: ${targetWorkout.avgHR} bpm
+- Max Heart Rate: ${targetWorkout.maxHR} bpm
+- Calories Burned: ${targetWorkout.calories} kcal
+${isRealtime ? `- Current Heart Rate: ${hrData[hrData.length - 1]} bpm\n- Current Zone: Zone ${getHRZone(hrData[hrData.length - 1])}` : ''}
+- Data Source: ${targetWorkout.researchSubject}
 
-    const prompt = `As an AI fitness coach, analyze this real-time workout data and provide immediate feedback:
+Please provide ${feedbackType} coaching feedback based on this data.`;
+    
+    // Create user message with full workout data
+    const userMessage = {
+        role: 'user',
+        content: workoutDataDetails,
+        timestamp: new Date().toISOString()
+    };
+    currentSession.messages.push(userMessage);
+    currentSession.updatedAt = new Date().toISOString();
 
-Workout Type: ${currentWorkout.type}
-Duration: ${formatDuration(currentWorkout.duration)}
-Current Heart Rate: ${hrData[hrData.length - 1]} bpm
-Average Heart Rate: ${currentWorkout.avgHR} bpm
-Max Heart Rate: ${currentWorkout.maxHR} bpm
-Current Zone: Zone ${getHRZone(hrData[hrData.length - 1])}
-
-Provide:
-1. Immediate feedback on current intensity
-2. Should they increase, decrease, or maintain current effort?
-3. Any concerns about overtraining or safety
-4. Encouragement and motivation
-
-Keep it concise and actionable.`;
+    // Render chat history with loading
+    renderChatHistory();
+    const loadingMsg = createCoachMessage('Analyzing your workout data...', true);
+    coachDiv.appendChild(loadingMsg);
 
     try {
-        const response = await callOpenRouterAPI(prompt);
-        coachDiv.innerHTML = '';
-        coachDiv.appendChild(createCoachMessage(response, false));
+        // Call API with conversation history (includes workout data in messages)
+        const response = await callOpenRouterAPI('', currentSession.messages);
+        
+        // Save AI response to chat
+        const aiMessage = {
+            role: 'assistant',
+            content: response,
+            timestamp: new Date().toISOString()
+        };
+        currentSession.messages.push(aiMessage);
+        currentSession.updatedAt = new Date().toISOString();
+        
+        // Update chat title if first message
+        updateChatTitle(currentChatId);
+        
+        // Save to localStorage
+        saveChatSessions();
+        
+        // Re-render
+        renderChatHistory();
+        renderChatSidebar();
     } catch (err) {
         coachDiv.innerHTML = '';
+        renderChatHistory();
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
     }
 }
@@ -1071,7 +1124,7 @@ function renderHistory() {
         return;
     }
 
-    const historyHTML = workoutHistory.map(workout => {
+    const historyHTML = workoutHistory.map((workout, index) => {
         const date = new Date(workout.startTime);
         const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -1115,6 +1168,7 @@ function renderHistory() {
                         <span class="history-stat-value">${workout.calories} kcal</span>
                     </div>
                 </div>
+                <button onclick="getRealtimeCoaching(workoutHistory[${index}])" style="width: 100%; margin-top: 12px; padding: 8px; background: var(--accent-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">🤖 Get AI Feedback</button>
             </div>
         `;
     }).join('');
