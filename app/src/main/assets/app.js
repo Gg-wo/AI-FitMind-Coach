@@ -1469,8 +1469,8 @@ function renderProgressDashboard() {
     // Render zone chart
     renderZoneChart();
     
-    // Render weekly activity
-    renderWeeklyActivity();
+    // Render activity overview chart
+    renderActivityOverview();
 }
 
 /**
@@ -1593,49 +1593,260 @@ function renderZoneChart() {
 }
 
 /**
- * Render weekly activity timeline
+ * Get activity data for a specific time period
  */
-function renderWeeklyActivity() {
-    const weeklyData = getWeeklyActivity();
-    const activityDiv = document.getElementById('weeklyActivity');
+function getActivityDataForPeriod(days) {
+    const now = Date.now();
+    const periodStart = now - (days * 24 * 60 * 60 * 1000);
     
-    if (weeklyData.length === 0) {
-        activityDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No workouts this week yet.</p>';
-        return;
+    const periodWorkouts = workoutHistory.filter(w => 
+        new Date(w.startTime).getTime() >= periodStart
+    );
+    
+    // Determine aggregation level based on period length
+    let aggregation = 'daily';
+    if (days > 90) {
+        aggregation = 'monthly';
+    } else if (days > 30) {
+        aggregation = 'weekly';
     }
     
-    const workoutIcons = {
-        'running': '🏃',
-        'cycling': '🚴',
-        'swimming': '🏊',
-        'strength': '💪',
-        'yoga': '🧘',
-        'hiit': '⚡'
+    // Create date buckets
+    const buckets = new Map();
+    
+    periodWorkouts.forEach(workout => {
+        const date = new Date(workout.startTime);
+        let key;
+        
+        if (aggregation === 'daily') {
+            key = date.toLocaleDateString();
+        } else if (aggregation === 'weekly') {
+            // Get Monday of the week
+            const monday = new Date(date);
+            const day = monday.getDay();
+            const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
+            monday.setDate(diff);
+            monday.setHours(0, 0, 0, 0);
+            key = monday.toLocaleDateString();
+        } else { // monthly
+            key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        }
+        
+        if (!buckets.has(key)) {
+            buckets.set(key, {
+                date: key,
+                workouts: [],
+                count: 0,
+                totalDuration: 0,
+                totalCalories: 0
+            });
+        }
+        
+        const bucket = buckets.get(key);
+        bucket.workouts.push(workout);
+        bucket.count++;
+        bucket.totalDuration += Math.floor(workout.duration / 60);
+        bucket.totalCalories += workout.calories;
+    });
+    
+    // Fill in missing dates with zero values
+    const sortedData = [];
+    let currentDate = new Date(periodStart);
+    const endDate = new Date(now);
+    
+    while (currentDate <= endDate) {
+        let key;
+        
+        if (aggregation === 'daily') {
+            key = currentDate.toLocaleDateString();
+        } else if (aggregation === 'weekly') {
+            const monday = new Date(currentDate);
+            const day = monday.getDay();
+            const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
+            monday.setDate(diff);
+            monday.setHours(0, 0, 0, 0);
+            key = monday.toLocaleDateString();
+        } else { // monthly
+            key = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        }
+        
+        const existing = buckets.get(key);
+        if (existing && !sortedData.find(d => d.date === key)) {
+            sortedData.push(existing);
+        } else if (!sortedData.find(d => d.date === key)) {
+            sortedData.push({
+                date: key,
+                workouts: [],
+                count: 0,
+                totalDuration: 0,
+                totalCalories: 0
+            });
+        }
+        
+        // Increment date based on aggregation
+        if (aggregation === 'daily') {
+            currentDate.setDate(currentDate.getDate() + 1);
+        } else if (aggregation === 'weekly') {
+            currentDate.setDate(currentDate.getDate() + 7);
+        } else { // monthly
+            currentDate.setMonth(currentDate.getMonth() + 1);
+        }
+    }
+    
+    // Calculate average heart rate for the period
+    const totalHeartRateSum = periodWorkouts.reduce((sum, w) => sum + (w.avgHeartRate || 0), 0);
+    const avgHeartRate = periodWorkouts.length > 0 ? Math.round(totalHeartRateSum / periodWorkouts.length) : 0;
+    
+    return {
+        data: sortedData,
+        aggregation: aggregation,
+        totalWorkouts: periodWorkouts.length,
+        avgPerWeek: periodWorkouts.length / (days / 7),
+        totalCalories: periodWorkouts.reduce((sum, w) => sum + w.calories, 0),
+        avgHeartRate: avgHeartRate
     };
+}
+
+/**
+ * Format date label based on aggregation level
+ */
+function formatDateLabel(dateStr, aggregation) {
+    const date = new Date(dateStr);
     
-    const html = weeklyData.map(day => `
-        <div style="border-left: 3px solid var(--accent-primary); padding: 12px; margin-bottom: 12px; background: rgba(0, 212, 255, 0.05); border-radius: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div>
-                    <strong style="color: var(--accent-primary);">${day.dayName}</strong>
-                    <span style="color: var(--text-secondary); font-size: 12px; margin-left: 8px;">${new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                </div>
-                <div style="text-align: right;">
-                    <div style="color: var(--text-primary); font-weight: 600;">${day.totalMinutes} min</div>
-                    <div style="color: var(--text-secondary); font-size: 12px;">${Math.round(day.totalCalories)} kcal</div>
-                </div>
-            </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                ${day.workouts.map(w => `
-                    <span style="background: rgba(0, 212, 255, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-                        ${workoutIcons[w.type] || '🏃'} ${w.type}
-                    </span>
-                `).join('')}
-            </div>
-        </div>
-    `).join('');
+    if (aggregation === 'daily') {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else if (aggregation === 'weekly') {
+        const weekNum = Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 1).getDay()) / 7);
+        return `Week ${weekNum}`;
+    } else { // monthly
+        const [year, month] = dateStr.split('-');
+        return new Date(year, month - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+}
+
+/**
+ * Render activity overview chart with selected time period
+ */
+let activityChart = null;
+function renderActivityOverview() {
+    const periodSelector = document.getElementById('periodSelector');
+    const days = parseInt(periodSelector.value);
     
-    activityDiv.innerHTML = html;
+    const activityData = getActivityDataForPeriod(days);
+    
+    // Update summary stats
+    document.getElementById('periodTotalWorkouts').textContent = activityData.totalWorkouts;
+    document.getElementById('periodAvgPerWeek').textContent = activityData.avgPerWeek.toFixed(1);
+    document.getElementById('periodAvgHeartRate').textContent = activityData.avgHeartRate > 0 ? activityData.avgHeartRate : '--';
+    document.getElementById('periodTotalCalories').textContent = Math.round(activityData.totalCalories);
+    
+    // Render chart
+    const canvas = document.getElementById('activityChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart
+    if (activityChart) {
+        activityChart.destroy();
+    }
+    
+    // Prepare chart data
+    const labels = activityData.data.map(d => formatDateLabel(d.date, activityData.aggregation));
+    const counts = activityData.data.map(d => d.count);
+    const durations = activityData.data.map(d => d.totalDuration);
+    const calories = activityData.data.map(d => Math.round(d.totalCalories));
+    
+    activityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Workouts',
+                data: counts,
+                borderColor: 'rgba(0, 212, 255, 1)',
+                backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: 'rgba(0, 212, 255, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 46, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: 'rgba(0, 212, 255, 0.5)',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].label;
+                        },
+                        label: function(context) {
+                            const index = context.dataIndex;
+                            return [
+                                `Workouts: ${counts[index]}`,
+                                `Duration: ${durations[index]} min`,
+                                `Calories: ${calories[index]} kcal`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        maxRotation: 45,
+                        minRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: activityData.aggregation === 'daily' ? 10 : 15
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        stepSize: 1,
+                        precision: 0
+                    },
+                    title: {
+                        display: true,
+                        text: 'Number of Workouts',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Custom modal functions
