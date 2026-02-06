@@ -442,6 +442,8 @@ function switchTab(tabName) {
 
     if (tabName === 'history') {
         renderHistory();
+    } else if (tabName === 'progress') {
+        renderProgressDashboard();
     }
 }
 
@@ -1306,6 +1308,334 @@ function updateHeaderStats() {
         .reduce((sum, w) => sum + Math.floor(w.duration / 60), 0);
 
     document.getElementById('weeklyMinutes').textContent = weeklyMinutes;
+}
+
+// ============================================================
+// PROGRESS TRACKING SYSTEM
+// ============================================================
+
+/**
+ * Calculate current workout streak (consecutive days with workouts)
+ */
+function calculateWorkoutStreak() {
+    if (workoutHistory.length === 0) return 0;
+    
+    const sortedWorkouts = [...workoutHistory].sort((a, b) => 
+        new Date(b.startTime) - new Date(a.startTime)
+    );
+    
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < sortedWorkouts.length; i++) {
+        const workoutDate = new Date(sortedWorkouts[i].startTime);
+        workoutDate.setHours(0, 0, 0, 0);
+        
+        const daysDiff = Math.floor((currentDate - workoutDate) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff === streak) {
+            streak++;
+            currentDate = new Date(workoutDate);
+        } else if (daysDiff > streak) {
+            break;
+        }
+    }
+    
+    return streak;
+}
+
+/**
+ * Calculate personal records from workout history
+ */
+function calculatePersonalRecords() {
+    if (workoutHistory.length === 0) {
+        return {
+            longestDuration: null,
+            highestAvgHR: null,
+            mostCalories: null,
+            mostFrequentType: null
+        };
+    }
+    
+    // Longest workout
+    const longestWorkout = workoutHistory.reduce((max, w) => w.duration > max.duration ? w : max);
+    
+    // Highest average HR
+    const highestHRWorkout = workoutHistory.reduce((max, w) => w.avgHR > max.avgHR ? w : max);
+    
+    // Most calories burned
+    const mostCaloriesWorkout = workoutHistory.reduce((max, w) => w.calories > max.calories ? w : max);
+    
+    // Most frequent workout type
+    const typeCounts = {};
+    workoutHistory.forEach(w => {
+        typeCounts[w.type] = (typeCounts[w.type] || 0) + 1;
+    });
+    const mostFrequent = Object.entries(typeCounts).reduce((max, [type, count]) => 
+        count > max.count ? { type, count } : max, { type: null, count: 0 }
+    );
+    
+    return {
+        longestDuration: longestWorkout,
+        highestAvgHR: highestHRWorkout,
+        mostCalories: mostCaloriesWorkout,
+        mostFrequentType: mostFrequent
+    };
+}
+
+/**
+ * Calculate heart rate zone distribution across all workouts
+ */
+function calculateZoneDistribution() {
+    if (workoutHistory.length === 0) {
+        return [0, 0, 0, 0, 0];
+    }
+    
+    const zoneMinutes = [0, 0, 0, 0, 0]; // Minutes in each zone
+    
+    workoutHistory.forEach(workout => {
+        if (!workout.hrData || workout.hrData.length === 0) {
+            // Fallback: estimate zone based on avgHR
+            const zone = getHRZone(workout.avgHR) - 1;
+            const minutes = Math.floor(workout.duration / 60);
+            zoneMinutes[zone] += minutes;
+        } else {
+            // Precise calculation from HR data
+            workout.hrData.forEach(hr => {
+                const zone = getHRZone(hr) - 1;
+                zoneMinutes[zone] += (1 / 60); // Each data point is 1 second
+            });
+        }
+    });
+    
+    return zoneMinutes.map(m => Math.round(m));
+}
+
+/**
+ * Get workouts grouped by day for the current week
+ */
+function getWeeklyActivity() {
+    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    const weekWorkouts = workoutHistory.filter(w => 
+        new Date(w.startTime).getTime() > oneWeekAgo
+    );
+    
+    // Group by day
+    const dayMap = {};
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    weekWorkouts.forEach(w => {
+        const date = new Date(w.startTime);
+        const dayKey = date.toLocaleDateString();
+        if (!dayMap[dayKey]) {
+            dayMap[dayKey] = {
+                dayName: days[date.getDay()],
+                date: dayKey,
+                workouts: [],
+                totalMinutes: 0,
+                totalCalories: 0
+            };
+        }
+        dayMap[dayKey].workouts.push(w);
+        dayMap[dayKey].totalMinutes += Math.floor(w.duration / 60);
+        dayMap[dayKey].totalCalories += w.calories;
+    });
+    
+    return Object.values(dayMap).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+/**
+ * Render complete progress dashboard
+ */
+function renderProgressDashboard() {
+    // Calculate stats
+    const streak = calculateWorkoutStreak();
+    const totalMinutes = workoutHistory.reduce((sum, w) => sum + Math.floor(w.duration / 60), 0);
+    const avgHR = workoutHistory.length > 0 
+        ? Math.round(workoutHistory.reduce((sum, w) => sum + w.avgHR, 0) / workoutHistory.length)
+        : 0;
+    const totalCalories = Math.round(workoutHistory.reduce((sum, w) => sum + w.calories, 0));
+    
+    // Update stat cards
+    document.getElementById('streakCount').textContent = streak;
+    document.getElementById('totalMinutes').textContent = totalMinutes;
+    document.getElementById('avgHeartRate').textContent = avgHR > 0 ? avgHR : '--';
+    document.getElementById('totalCalories').textContent = totalCalories;
+    
+    // Render personal records
+    renderPersonalRecords();
+    
+    // Render zone chart
+    renderZoneChart();
+    
+    // Render weekly activity
+    renderWeeklyActivity();
+}
+
+/**
+ * Render personal records section
+ */
+function renderPersonalRecords() {
+    const records = calculatePersonalRecords();
+    const recordsDiv = document.getElementById('personalRecords');
+    
+    if (!records.longestDuration) {
+        recordsDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No workouts yet. Complete your first workout to see records!</p>';
+        return;
+    }
+    
+    const workoutIcons = {
+        'running': '🏃',
+        'cycling': '🚴',
+        'swimming': '🏊',
+        'strength': '💪',
+        'yoga': '🧘',
+        'hiit': '⚡'
+    };
+    
+    recordsDiv.innerHTML = `
+        <div style="display: grid; gap: 12px;">
+            <div class="record-item">
+                <span class="record-label">⏱️ Longest Workout</span>
+                <span class="record-value">${formatDuration(records.longestDuration.duration)} (${workoutIcons[records.longestDuration.type] || '🏃'} ${records.longestDuration.type})</span>
+            </div>
+            <div class="record-item">
+                <span class="record-label">❤️ Highest Avg HR</span>
+                <span class="record-value">${records.highestAvgHR.avgHR} bpm (${workoutIcons[records.highestAvgHR.type] || '🏃'} ${records.highestAvgHR.type})</span>
+            </div>
+            <div class="record-item">
+                <span class="record-label">🔥 Most Calories</span>
+                <span class="record-value">${Math.round(records.mostCalories.calories)} kcal (${workoutIcons[records.mostCalories.type] || '🏃'} ${records.mostCalories.type})</span>
+            </div>
+            <div class="record-item">
+                <span class="record-label">⭐ Favorite Activity</span>
+                <span class="record-value">${workoutIcons[records.mostFrequentType.type] || '🏃'} ${records.mostFrequentType.type.charAt(0).toUpperCase() + records.mostFrequentType.type.slice(1)} (${records.mostFrequentType.count}x)</span>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render heart rate zone distribution pie chart
+ */
+let zoneChart = null;
+function renderZoneChart() {
+    const zoneMinutes = calculateZoneDistribution();
+    const canvas = document.getElementById('zoneChart');
+    
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart
+    if (zoneChart) {
+        zoneChart.destroy();
+    }
+    
+    // Check if there's any data
+    const hasData = zoneMinutes.some(m => m > 0);
+    
+    if (!hasData) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.font = '14px Arial';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.textAlign = 'center';
+        ctx.fillText('No workout data yet', canvas.width / 2, canvas.height / 2);
+        return;
+    }
+    
+    zoneChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Zone 1: Recovery', 'Zone 2: Fat Burn', 'Zone 3: Aerobic', 'Zone 4: Anaerobic', 'Zone 5: Max Effort'],
+            datasets: [{
+                data: zoneMinutes,
+                backgroundColor: [
+                    'rgba(74, 222, 128, 0.8)',   // Zone 1 - Green
+                    'rgba(251, 191, 36, 0.8)',   // Zone 2 - Yellow
+                    'rgba(251, 146, 60, 0.8)',   // Zone 3 - Orange
+                    'rgba(248, 113, 113, 0.8)',  // Zone 4 - Red
+                    'rgba(220, 38, 38, 0.8)'     // Zone 5 - Dark Red
+                ],
+                borderColor: 'rgba(30, 30, 46, 0.8)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-primary'),
+                        padding: 12,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const minutes = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percent = total > 0 ? ((minutes / total) * 100).toFixed(1) : 0;
+                            return ` ${minutes} min (${percent}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Render weekly activity timeline
+ */
+function renderWeeklyActivity() {
+    const weeklyData = getWeeklyActivity();
+    const activityDiv = document.getElementById('weeklyActivity');
+    
+    if (weeklyData.length === 0) {
+        activityDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No workouts this week yet.</p>';
+        return;
+    }
+    
+    const workoutIcons = {
+        'running': '🏃',
+        'cycling': '🚴',
+        'swimming': '🏊',
+        'strength': '💪',
+        'yoga': '🧘',
+        'hiit': '⚡'
+    };
+    
+    const html = weeklyData.map(day => `
+        <div style="border-left: 3px solid var(--accent-primary); padding: 12px; margin-bottom: 12px; background: rgba(0, 212, 255, 0.05); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div>
+                    <strong style="color: var(--accent-primary);">${day.dayName}</strong>
+                    <span style="color: var(--text-secondary); font-size: 12px; margin-left: 8px;">${new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                </div>
+                <div style="text-align: right;">
+                    <div style="color: var(--text-primary); font-weight: 600;">${day.totalMinutes} min</div>
+                    <div style="color: var(--text-secondary); font-size: 12px;">${Math.round(day.totalCalories)} kcal</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                ${day.workouts.map(w => `
+                    <span style="background: rgba(0, 212, 255, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                        ${workoutIcons[w.type] || '🏃'} ${w.type}
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+    
+    activityDiv.innerHTML = html;
 }
 
 // Custom modal functions

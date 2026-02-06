@@ -50,6 +50,7 @@
         <div class="tabs">
             <div class="tab active" onclick="switchTab('live')">🏃 Live Session</div>
             <div class="tab" onclick="switchTab('coach')">🤖 AI Coach</div>
+            <div class="tab" onclick="switchTab('progress')">📈 Progress</div>
             <div class="tab" onclick="switchTab('history')">📊 History</div>
             <div class="tab" onclick="switchTab('about')">ℹ️ About</div>
         </div>
@@ -168,6 +169,58 @@
                 </div>
 
                 <div id="coachResponses" style="max-height: 500px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Progress Tab -->
+        <div class="tab-content" id="progress-tab">
+            <div class="card">
+                <h2>📈 Your Progress</h2>
+                
+                <!-- Stats Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div class="stat-card">
+                        <div class="stat-card-label">Workout Streak</div>
+                        <div class="stat-card-value" id="streakCount">0</div>
+                        <div class="stat-card-subtitle">days in a row 🔥</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Total Time</div>
+                        <div class="stat-card-value" id="totalMinutes">0</div>
+                        <div class="stat-card-subtitle">minutes trained</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Avg HR</div>
+                        <div class="stat-card-value" id="avgHeartRate">--</div>
+                        <div class="stat-card-subtitle">bpm overall</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Total Calories</div>
+                        <div class="stat-card-value" id="totalCalories">0</div>
+                        <div class="stat-card-subtitle">kcal burned</div>
+                    </div>
+                </div>
+
+                <!-- Personal Records -->
+                <div class="card" style="background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(155,81,224,0.05)); margin-bottom: 24px;">
+                    <h3>🏆 Personal Records</h3>
+                    <div id="personalRecords" style="display: grid; gap: 12px;"></div>
+                </div>
+
+                <!-- Heart Rate Zone Distribution -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <h3>❤️ Heart Rate Zone Distribution</h3>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">Time spent in each training zone</p>
+                    <div style="max-width: 400px; margin: 0 auto;">
+                        <canvas id="zoneChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Weekly Activity -->
+                <div class="card">
+                    <h3>📅 This Week's Activity</h3>
+                    <div id="weeklyActivity"></div>
+                </div>
             </div>
         </div>
 
