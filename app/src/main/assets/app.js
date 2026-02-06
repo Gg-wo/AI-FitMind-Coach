@@ -85,11 +85,23 @@ function getWorkoutTypeContext(workoutType) {
 function getFitnessCoachSystemPrompt() {
     return `You are FitMind AI - a real-time fitness coach that analyzes smartwatch data to optimize workouts and prevent overtraining.
 
-🎯 YOUR MISSION: Adjust workout intensity based on heart rate zones and provide actionable coaching.
+🎯 TWO COACHING MODES:
+
+🔴 REAL-TIME MODE (during workout):
+- Focus on IMMEDIATE adjustments (NOW actions)
+- Example: "Slow down NOW - your HR is too high" or "Maintain this pace for 5 more minutes"
+- Prioritize SAFETY - stop if dangerous
+- Be urgent and directive
+
+📋 REVIEW MODE (post-workout):
+- Focus on OVERALL assessment
+- What went well, what didn't, patterns noticed
+- Recommendations for NEXT time
+- Recovery and training plan suggestions
 
 📊 RESPONSE FORMAT (Keep it SHORT - 2-4 sentences max):
 1. Quick analysis of their HR zone/intensity
-2. ONE specific action (adjust pace, recover, push harder, or rest)
+2. ONE specific action (real-time: adjust NOW | review: do NEXT time)
 3. Brief reason WHY based on their data
 
 ❤️ HEART RATE ZONE GUIDANCE:
@@ -834,12 +846,27 @@ async function getRealtimeCoaching(workout = null) {
     const hrZone = getHeartRateZone(targetWorkout.avgHR, targetWorkout.maxHR);
     const hrPercentage = Math.round((targetWorkout.avgHR / targetWorkout.maxHR) * 100);
     
-    const workoutDataDetails = `📊 Workout: ${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
+    // Different prompts for real-time vs historical analysis
+    let workoutDataDetails;
+    if (isRealtime) {
+        // REAL-TIME: Focus on immediate adjustments
+        const currentHR = hrData[hrData.length - 1];
+        const currentZone = getHRZone(currentHR);
+        workoutDataDetails = `🔴 REAL-TIME WORKOUT IN PROGRESS:
+${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)} elapsed
+⏰ Current HR: ${currentHR} bpm (Zone ${currentZone})
+📊 Average so far: ${targetWorkout.avgHR} bpm (${hrPercentage}%)
+
+⚠️ RIGHT NOW: Should I slow down, maintain pace, or push harder?`;
+    } else {
+        // HISTORICAL: Focus on review and future recommendations
+        workoutDataDetails = `📋 COMPLETED WORKOUT REVIEW:
+${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
 ❤️ HR: ${targetWorkout.avgHR} bpm avg (${hrPercentage}%) | ${targetWorkout.maxHR} bpm peak
 📈 Zone ${hrZone.zone} - ${hrZone.name} | ${targetWorkout.calories} kcal
-${isRealtime ? `⏰ Current: ${hrData[hrData.length - 1]} bpm (Zone ${getHRZone(hrData[hrData.length - 1])})` : ''}
 
-Coach me: Should I adjust intensity or recover?`;
+💡 How did I do? What should I focus on NEXT time?`;
+    }
     
     // Create workout context for AI system prompt
     const workoutContext = {
@@ -847,7 +874,8 @@ Coach me: Should I adjust intensity or recover?`;
         avgHR: targetWorkout.avgHR,
         maxHR: targetWorkout.maxHR,
         duration: targetWorkout.duration,
-        calories: targetWorkout.calories
+        calories: targetWorkout.calories,
+        isRealtime: isRealtime  // Pass this to system prompt
     };
     
     // Create user message with full workout data
@@ -990,9 +1018,14 @@ async function callOpenRouterAPI(prompt, conversationHistory = null, workoutCont
     
     // Add workout-specific context if provided
     if (workoutContext) {
+        const contextType = workoutContext.isRealtime ? 'real-time' : 'historical';
         messages.push({
             role: 'system',
-            content: `${getWorkoutTypeContext(workoutContext.type)}${getHeartRateContext(workoutContext)}`
+            content: `${getWorkoutTypeContext(workoutContext.type)}${getHeartRateContext(workoutContext)}
+
+${workoutContext.isRealtime 
+    ? '🔴 REAL-TIME MODE: User is CURRENTLY working out. Focus on IMMEDIATE actions (slow down NOW, maintain for 5 min, etc). Prioritize SAFETY - warn if HR too high for duration.' 
+    : '📋 REVIEW MODE: Workout is COMPLETED. Focus on overall assessment, what went well/wrong, and recommendations for NEXT time. No immediate actions needed.'}`
         });
     }
 
