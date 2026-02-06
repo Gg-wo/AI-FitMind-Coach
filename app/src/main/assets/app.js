@@ -42,6 +42,74 @@ const OPENROUTER_API_KEY = typeof CONFIG !== 'undefined' ? CONFIG.OPENROUTER_API
 const OPENROUTER_MODEL = typeof CONFIG !== 'undefined' && CONFIG.MODEL ? CONFIG.MODEL : 'meta-llama/llama-3.1-70b-instruct';
 
 // ============================================================
+// PROMPT ENGINEERING - EXPERT FITNESS COACH SYSTEM
+// ============================================================
+
+// Heart Rate Zones (based on % of max HR)
+function getHeartRateZone(avgHR, maxHR = MAX_HR) {
+    const percentage = (avgHR / maxHR) * 100;
+    
+    if (percentage < 60) return { zone: 1, name: 'Recovery', benefit: 'active recovery, warm-up', intensity: 'Very Light' };
+    if (percentage < 70) return { zone: 2, name: 'Fat Burn', benefit: 'fat burning, aerobic base building', intensity: 'Light' };
+    if (percentage < 80) return { zone: 3, name: 'Aerobic', benefit: 'cardiovascular fitness, endurance', intensity: 'Moderate' };
+    if (percentage < 90) return { zone: 4, name: 'Anaerobic', benefit: 'performance improvement, lactate threshold', intensity: 'Hard' };
+    return { zone: 5, name: 'Max Effort', benefit: 'peak performance, VO2 max', intensity: 'Maximum' };
+}
+
+// Generate heart rate context for AI
+function getHeartRateContext(workout) {
+    if (!workout || !workout.avgHR) return '';
+    
+    const zone = getHeartRateZone(workout.avgHR, workout.maxHR || MAX_HR);
+    const percentage = Math.round((workout.avgHR / (workout.maxHR || MAX_HR)) * 100);
+    
+    return `\n📊 HR DATA: ${workout.avgHR} bpm (${percentage}% max) - Zone ${zone.zone} (${zone.name})${workout.maxHR ? ` | Peak: ${workout.maxHR} bpm` : ''}`;
+}
+
+// Generate workout-specific context
+function getWorkoutTypeContext(workoutType) {
+    const contexts = {
+        'RUNNING': '🏃 Focus: Pace control, cadence, prevent overuse injuries. Watch for sustained Zone 4+ (reduce if >20 min).',
+        'CYCLING': '🚴 Focus: Cadence 80-100 RPM, power output, endurance building. Zone 3 ideal for long rides.',
+        'STRENGTH': '💪 Focus: Form over speed, recovery 48-72hrs between muscle groups. HR often Zone 2-3.',
+        'YOGA': '🧘 Focus: Breath work, flexibility, active recovery. Expect Zone 1-2 (recovery pace).',
+        'SWIMMING': '🏊 Focus: Stroke efficiency, breathing rhythm. Low-impact cardio, can sustain Zone 3.',
+        'HIIT': '⚡ Focus: Work-rest ratios, HR recovery between intervals. Expect Zone 4-5 spikes, limit frequency.',
+        'WALKING': '🚶 Focus: Consistency, gradual progression. Zone 1-2, safe for daily training.'
+    };
+    
+    return contexts[workoutType] || '🏋️ General fitness: Balance intensity with recovery, monitor HR zones.';
+}
+
+// Master system prompt with fitness expertise
+function getFitnessCoachSystemPrompt() {
+    return `You are FitMind AI - a real-time fitness coach that analyzes smartwatch data to optimize workouts and prevent overtraining.
+
+🎯 YOUR MISSION: Adjust workout intensity based on heart rate zones and provide actionable coaching.
+
+📊 RESPONSE FORMAT (Keep it SHORT - 2-4 sentences max):
+1. Quick analysis of their HR zone/intensity
+2. ONE specific action (adjust pace, recover, push harder, or rest)
+3. Brief reason WHY based on their data
+
+❤️ HEART RATE ZONE GUIDANCE:
+- Zone 1-2 (Recovery/Fat Burn): Safe for daily training, build aerobic base
+- Zone 3 (Aerobic): Optimal for endurance, can sustain 45-60 min
+- Zone 4 (Anaerobic): High intensity, limit to 20-30 min, requires recovery
+- Zone 5 (Max): Peak effort, only short intervals, high injury/overtraining risk
+
+⚠️ OVERTRAINING SIGNS TO WATCH:
+- Avg HR >85% max for >30 min → Recommend reduction or rest day
+- Multiple Zone 4-5 workouts without rest → Warn about overtraining
+- High calories + long duration → Emphasize recovery and nutrition
+
+✅ ALWAYS use their ACTUAL numbers (HR, duration, zone) in your response.
+❌ NEVER give medical advice, diagnose injuries, or ignore their data.
+
+Be concise, data-driven, and motivating.`;
+}
+
+// ============================================================
 // LOCAL STORAGE MANAGEMENT
 // ============================================================
 
@@ -762,18 +830,25 @@ async function getRealtimeCoaching(workout = null) {
         coachTab.classList.add('active');
     }
     
-    // Build detailed workout data message with all metrics
-    const workoutDataDetails = `
-📊 Workout Analysis Request:
-- Type: ${targetWorkout.type.toUpperCase()}
-- Duration: ${formatDuration(targetWorkout.duration)}
-- Average Heart Rate: ${targetWorkout.avgHR} bpm
-- Max Heart Rate: ${targetWorkout.maxHR} bpm
-- Calories Burned: ${targetWorkout.calories} kcal
-${isRealtime ? `- Current Heart Rate: ${hrData[hrData.length - 1]} bpm\n- Current Zone: Zone ${getHRZone(hrData[hrData.length - 1])}` : ''}
-- Data Source: ${targetWorkout.researchSubject}
+    // Build detailed workout data message with all metrics and heart rate zone analysis
+    const hrZone = getHeartRateZone(targetWorkout.avgHR, targetWorkout.maxHR);
+    const hrPercentage = Math.round((targetWorkout.avgHR / targetWorkout.maxHR) * 100);
+    
+    const workoutDataDetails = `📊 Workout: ${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
+❤️ HR: ${targetWorkout.avgHR} bpm avg (${hrPercentage}%) | ${targetWorkout.maxHR} bpm peak
+📈 Zone ${hrZone.zone} - ${hrZone.name} | ${targetWorkout.calories} kcal
+${isRealtime ? `⏰ Current: ${hrData[hrData.length - 1]} bpm (Zone ${getHRZone(hrData[hrData.length - 1])})` : ''}
 
-Please provide ${feedbackType} coaching feedback based on this data.`;
+Coach me: Should I adjust intensity or recover?`;
+    
+    // Create workout context for AI system prompt
+    const workoutContext = {
+        type: targetWorkout.type.toUpperCase(),
+        avgHR: targetWorkout.avgHR,
+        maxHR: targetWorkout.maxHR,
+        duration: targetWorkout.duration,
+        calories: targetWorkout.calories
+    };
     
     // Create user message with full workout data
     const userMessage = {
@@ -786,12 +861,12 @@ Please provide ${feedbackType} coaching feedback based on this data.`;
 
     // Render chat history with loading
     renderChatHistory();
-    const loadingMsg = createCoachMessage('Analyzing your workout data...', true);
+    const loadingMsg = createCoachMessage('Analyzing...', true);
     coachDiv.appendChild(loadingMsg);
 
     try {
-        // Call API with conversation history (includes workout data in messages)
-        const response = await callOpenRouterAPI('', currentSession.messages);
+        // Call API with conversation history AND workout context for enhanced prompts
+        const response = await callOpenRouterAPI('', currentSession.messages, workoutContext);
         
         // Save AI response to chat
         const aiMessage = {
@@ -900,18 +975,26 @@ Provide a detailed, personalized response with actionable advice.`;
 }
 
 // Call OpenRouter API with conversation history support
-async function callOpenRouterAPI(prompt, conversationHistory = null) {
+async function callOpenRouterAPI(prompt, conversationHistory = null, workoutContext = null) {
     if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'YOUR_API_KEY_HERE') {
-        throw new Error('Please set your OpenRouter API key in the app.js file');
+        throw new Error('Please set your OpenRouter API key in the config.js file');
     }
 
-    // Build messages array with system prompt and conversation context
+    // Build messages array with enhanced system prompt
     const messages = [
         {
             role: 'system',
-            content: 'You are an expert AI fitness coach specializing in personalized training advice, heart rate zone analysis, and workout optimization. Provide clear, actionable, and encouraging guidance. Keep responses concise and focused.'
+            content: getFitnessCoachSystemPrompt()
         }
     ];
+    
+    // Add workout-specific context if provided
+    if (workoutContext) {
+        messages.push({
+            role: 'system',
+            content: `${getWorkoutTypeContext(workoutContext.type)}${getHeartRateContext(workoutContext)}`
+        });
+    }
 
     // Add conversation history if provided (last 10 messages to keep context manageable)
     if (conversationHistory && conversationHistory.length > 0) {
@@ -941,8 +1024,9 @@ async function callOpenRouterAPI(prompt, conversationHistory = null) {
         body: JSON.stringify({
             model: OPENROUTER_MODEL,
             messages: messages,
-            temperature: 0.7,
-            max_tokens: 500
+            temperature: 0.7,  // Balanced creativity and consistency
+            max_tokens: 250,   // Limit for concise responses (2-4 sentences)
+            top_p: 0.9         // Slight randomness for natural responses
         })
     });
 
