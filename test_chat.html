@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Chat Sidebar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+        }
+        #output {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .error {
+            color: #ff4444;
+            font-weight: bold;
+        }
+        .success {
+            color: #44ff44;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Chat Sidebar Code</h1>
+    <button onclick="testRenderFunction()">Test renderChatSidebar()</button>
+    <div id="output"></div>
+    <div id="chatList"></div>
+
+    <script>
+        // Simulate chat sessions data
+        let chatSessions = [
+            {
+                id: 'chat_123',
+                title: 'Test Chat 1',
+                messages: [{role: 'user', content: 'Hello'}]
+            },
+            {
+                id: 'chat_456',
+                title: 'Test Chat 2',
+                messages: [{role: 'user', content: 'Hi'}, {role: 'assistant', content: 'Hello!'}]
+            }
+        ];
+        let currentChatId = 'chat_123';
+
+        // Original BROKEN code (with nested quotes):
+        function renderChatSidebar_OLD() {
+            const sidebar = document.getElementById('chatList');
+            if (!sidebar) return;
+            
+            sidebar.innerHTML = '';
+            
+            if (chatSessions.length === 0) {
+                sidebar.innerHTML = '<p>No chats yet</p>';
+                return;
+            }
+            
+            chatSessions.forEach(session => {
+                const item = document.createElement('div');
+                item.className = 'chat-item';
+                // THIS LINE BREAKS - nested quotes!
+                item.innerHTML = `
+                    <div onclick="alert('${session.id}')">  
+                        <div>${session.title}</div>
+                        <div>${session.messages.length} messages</div>
+                    </div>
+                `;
+                sidebar.appendChild(item);
+            });
+        }
+
+        // NEW fixed code (using DOM creation):
+        function renderChatSidebar() {
+            const sidebar = document.getElementById('chatList');
+            if (!sidebar) {
+                console.warn('chatList element not found');
+                return;
+            }
+            
+            sidebar.innerHTML = '';
+            
+            if (chatSessions.length === 0) {
+                sidebar.innerHTML = '<p style="color: var(--text-secondary); padding: 12px; text-align: center; font-size: 14px;">No chats yet</p>';
+                return;
+            }
+            
+            chatSessions.forEach(session => {
+                const item = document.createElement('div');
+                item.className = 'chat-item' + (session.id === currentChatId ? ' active' : '');
+                
+                const content = document.createElement('div');
+                content.className = 'chat-item-content';
+                content.onclick = () => {
+                    alert('Switched to: ' + session.id);
+                };
+                
+                const title = document.createElement('div');
+                title.className = 'chat-item-title';
+                title.textContent = session.title;
+                
+                const meta = document.createElement('div');
+                meta.className = 'chat-item-meta';
+                meta.textContent = `${session.messages.length} messages`;
+                
+                content.appendChild(title);
+                content.appendChild(meta);
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '🗑️';
+                deleteBtn.title = 'Delete chat';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    alert('Delete: ' + session.id);
+                };
+                
+                item.appendChild(content);
+                item.appendChild(deleteBtn);
+                sidebar.appendChild(item);
+            });
+        }
+
+        function testRenderFunction() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<p class="success">✅ Testing...</p>';
+            
+            try {
+                renderChatSidebar();
+                output.innerHTML = '<p class="success">✅ SUCCESS! Function executed without errors.</p>';
+                output.innerHTML += '<p>Check the chatList div below for rendered items.</p>';
+            } catch (error) {
+                output.innerHTML = `<p class="error">❌ ERROR: ${error.message}</p>`;
+                output.innerHTML += `<pre>${error.stack}</pre>`;
+            }
+        }
+
+        // Auto-run test
+        window.onload = () => {
+            testRenderFunction();
+        };
+    </script>
+</body>
+</html>

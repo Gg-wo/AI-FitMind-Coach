@@ -36,8 +36,10 @@ const MAX_HR = 190; // Example max heart rate
 const REST_HR = 65;
 
 // OpenRouter API Configuration
-const OPENROUTER_API_KEY = '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';  // Replace with your actual API key
-const OPENROUTER_MODEL = 'meta-llama/llama-3.1-70b-instruct';  // Fast & free tier friendly
+// API key is now stored in config.js (gitignored for security)
+// If config.js doesn't exist, copy config.example.js and add your key
+const OPENROUTER_API_KEY = typeof CONFIG !== 'undefined' ? CONFIG.OPENROUTER_API_KEY : 'YOUR_API_KEY_HERE';
+const OPENROUTER_MODEL = typeof CONFIG !== 'undefined' && CONFIG.MODEL ? CONFIG.MODEL : 'meta-llama/llama-3.1-70b-instruct';
 
 // ============================================================
 // LOCAL STORAGE MANAGEMENT

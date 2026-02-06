@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# API Keys - NEVER commit this file!
+app/src/main/assets/config.js
