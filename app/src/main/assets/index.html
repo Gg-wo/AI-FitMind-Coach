@@ -41,6 +41,10 @@
                     <div class="stat-label">This Week</div>
                 </div>
             </div>
+            <div id="userInfo" style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+                <!-- User profile will be injected here by firebase-sync.js -->
+                <button onclick="toggleSettingsMenu()" style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 8px; color: var(--text-primary);" title="Settings">⚙️</button>
+            </div>
         </div>
     </div>
 </header>
@@ -375,8 +379,64 @@
     <div id="chatList" class="chat-list"></div>
 </div>
 
+<!-- Settings Menu -->
+<div id="settingsMenuBackdrop" class="chat-sidebar-backdrop" onclick="toggleSettingsMenu()" style="display: none;"></div>
+<div id="settingsMenu" class="settings-menu" style="display: none;">
+    <div class="settings-header">
+        <h3 style="margin: 0;">⚙️ Settings</h3>
+        <button onclick="toggleSettingsMenu()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-primary);">×</button>
+    </div>
+    <div class="settings-content">
+        <div class="settings-section">
+            <h4>Account</h4>
+            <div class="settings-item">
+                <span id="userEmail" style="color: var(--text-secondary); font-size: 14px;">Not signed in</span>
+            </div>
+            <button id="authButton" onclick="handleAuthAction()" class="settings-button">Sign In</button>
+        </div>
+        
+        <div class="settings-section">
+            <h4>Preferences</h4>
+            <div class="settings-item">
+                <label for="darkModeToggle" style="flex: 1;">Dark Mode</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="darkModeToggle" checked onchange="toggleDarkMode()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="settings-item">
+                <label for="notificationsToggle" style="flex: 1;">Notifications</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="notificationsToggle" checked onchange="toggleNotifications()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <h4>Data Management</h4>
+            <button onclick="exportData()" class="settings-button secondary">📥 Export All Data</button>
+            <button onclick="deleteAllData()" class="settings-button danger">🗑️ Delete All Local Data</button>
+        </div>
+        
+        <div class="settings-section">
+            <p style="font-size: 12px; color: var(--text-muted); text-align: center; margin: 0;">
+                FitMind AI Coach v1.0<br>
+                Made with ⚡ for fitness enthusiasts
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
 <!-- Configuration & Local Logic -->
 <script src="config.js"></script>
+<script src="firebase-config.js"></script>
+<script src="firebase-sync.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

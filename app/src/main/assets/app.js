@@ -126,12 +126,17 @@ Be concise, data-driven, and motivating.`;
 // ============================================================
 
 /**
- * Save workout history to localStorage
+ * Save workout history to localStorage and sync to cloud
  */
 function saveWorkoutHistory() {
     try {
         localStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(workoutHistory));
         console.log('✓ Saved workout history:', workoutHistory.length, 'workouts');
+        
+        // Sync to Firebase if available
+        if (window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
+            window.firebaseSync.debouncedSyncToCloud();
+        }
     } catch (error) {
         console.error('Failed to save workout history:', error);
         showAlert('Warning: Failed to save workout data');
@@ -156,13 +161,18 @@ function loadWorkoutHistory() {
 }
 
 /**
- * Save all chat sessions to localStorage
+ * Save all chat sessions to localStorage and sync to cloud
  */
 function saveChatSessions() {
     try {
         localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(chatSessions));
         localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, currentChatId || '');
         console.log('✓ Saved chat sessions:', chatSessions.length, 'sessions');
+        
+        // Sync to Firebase if available
+        if (window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
+            window.firebaseSync.debouncedSyncToCloud();
+        }
     } catch (error) {
         console.error('Failed to save chat sessions:', error);
     }
@@ -1908,6 +1918,160 @@ function showConfirmDialog(message, onConfirm) {
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
+    });
+}
+
+// ============================================================
+// SETTINGS MENU & USER PREFERENCES
+// ============================================================
+
+/**
+ * Toggle settings menu visibility
+ */
+function toggleSettingsMenu() {
+    const menu = document.getElementById('settingsMenu');
+    const backdrop = document.getElementById('settingsMenuBackdrop');
+    
+    if (!menu || !backdrop) return;
+    
+    const isVisible = menu.style.display === 'block';
+    
+    if (isVisible) {
+        menu.style.display = 'none';
+        backdrop.style.display = 'none';
+    } else {
+        menu.style.display = 'block';
+        backdrop.style.display = 'block';
+        
+        // Update user email display
+        updateSettingsUI();
+    }
+}
+
+/**
+ * Update settings UI with current state
+ */
+function updateSettingsUI() {
+    const userEmailEl = document.getElementById('userEmail');
+    const authButton = document.getElementById('authButton');
+    
+    if (window.auth && window.auth.currentUser) {
+        const user = window.auth.currentUser;
+        userEmailEl.textContent = user.email;
+        authButton.textContent = 'Sign Out';
+        authButton.onclick = () => {
+            if (window.firebaseSync) {
+                window.firebaseSync.signOut();
+            }
+        };
+    } else {
+        userEmailEl.textContent = 'Not signed in';
+        authButton.textContent = 'Sign In';
+        authButton.onclick = () => {
+            window.location.href = 'auth.html';
+        };
+    }
+    
+    // Update preference toggles
+    if (window.firebaseSync && window.firebaseSync.userPreferences) {
+        const prefs = window.firebaseSync.userPreferences;
+        document.getElementById('darkModeToggle').checked = prefs.darkMode !== false;
+        document.getElementById('notificationsToggle').checked = prefs.notifications !== false;
+    }
+}
+
+/**
+ * Handle auth action (sign in or sign out)
+ */
+function handleAuthAction() {
+    if (window.auth && window.auth.currentUser) {
+        if (window.firebaseSync) {
+            window.firebaseSync.signOut();
+        }
+    } else {
+        window.location.href = 'auth.html';
+    }
+}
+
+/**
+ * Toggle dark mode
+ */
+function toggleDarkMode() {
+    const enabled = document.getElementById('darkModeToggle').checked;
+    
+    if (enabled) {
+        document.body.classList.remove('light-mode');
+    } else {
+        document.body.classList.add('light-mode');
+    }
+    
+    // Save to Firebase if available
+    if (window.firebaseSync && window.firebaseSync.userPreferences) {
+        window.firebaseSync.userPreferences.darkMode = enabled;
+        if (window.firebaseSync.saveUserPreferences) {
+            window.firebaseSync.saveUserPreferences();
+        }
+    }
+}
+
+/**
+ * Toggle notifications
+ */
+function toggleNotifications() {
+    const enabled = document.getElementById('notificationsToggle').checked;
+    
+    // Save to Firebase if available
+    if (window.firebaseSync && window.firebaseSync.userPreferences) {
+        window.firebaseSync.userPreferences.notifications = enabled;
+        if (window.firebaseSync.saveUserPreferences) {
+            window.firebaseSync.saveUserPreferences();
+        }
+    }
+    
+    showAlert(enabled ? 'Notifications enabled' : 'Notifications disabled');
+}
+
+/**
+ * Export all data as JSON
+ */
+function exportData() {
+    const data = {
+        workouts: workoutHistory,
+        chats: chatSessions,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const dataStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fitmind-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showAlert('Data exported successfully!');
+}
+
+/**
+ * Delete all local data
+ */
+function deleteAllData() {
+    showConfirmDialog('⚠️ This will delete ALL your local workout and chat data. This action cannot be undone. Are you sure?', () => {
+        localStorage.clear();
+        workoutHistory = [];
+        chatSessions = [];
+        currentChatId = null;
+        
+        // Reload page to reset state
+        showAlert('All local data deleted. Page will reload...');
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
     });
 }
 
