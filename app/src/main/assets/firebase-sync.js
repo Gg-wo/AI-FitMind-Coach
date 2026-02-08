@@ -62,13 +62,17 @@ function initializeAuth() {
         } else {
             currentUser = null;
             syncEnabled = false;
-            console.log('ℹ️ No user signed in. Running in offline mode.');
             
-            // Check if we're not on auth page and should redirect
-            if (!window.location.pathname.includes('auth.html')) {
-                // Optional: Show banner instead of forcing redirect
-                showSyncStatusBanner('offline');
+            // Check if user chose to continue as guest
+            const guestMode = localStorage.getItem('fitmind_guest_mode');
+            console.log(`📱 Auth check: No user, guestMode=${guestMode}, path=${window.location.pathname}`);
+            
+            if (guestMode === 'true') {
+                console.log('ℹ️ Running in Guest Mode (offline).');
+                // Show subtle banner for guest users
+                showGuestModeBanner();
             }
+            // Note: No automatic redirect - user can sign in via settings menu
         }
     });
 }
@@ -77,19 +81,13 @@ function initializeAuth() {
  * Update UI with user information
  */
 function updateUserUI(user) {
-    // Add user avatar/email to header if element exists
-    const userInfo = document.getElementById('userInfo');
-    if (userInfo) {
-        const displayName = user.displayName || user.email.split('@')[0];
-        const photoURL = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=00d4ff&color=fff`;
-        
-        userInfo.innerHTML = `
-            <div class="user-profile" onclick="toggleUserMenu()">
-                <img src="${photoURL}" alt="${displayName}" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--accent-primary);">
-                <span style="margin-left: 8px; font-weight: 600;">${displayName}</span>
-            </div>
-        `;
+    // Update user email display in dropdown if function exists
+    if (typeof updateUserEmailDisplay === 'function') {
+        updateUserEmailDisplay();
     }
+    
+    // You can add more UI updates here if needed
+    console.log(`✅ UI updated for user: ${user.email}`);
 }
 
 /**
@@ -134,6 +132,18 @@ function showSyncStatusBanner(status) {
 }
 
 /**
+ * Show guest mode banner (less intrusive)
+ */
+function showGuestModeBanner() {
+    // Update user email display in dropdown if function exists
+    if (typeof updateUserEmailDisplay === 'function') {
+        updateUserEmailDisplay();
+    }
+    
+    console.log('✅ Guest mode UI updated');
+}
+
+/**
  * Sign out user
  */
 async function signOut() {
@@ -147,6 +157,9 @@ async function signOut() {
         
         await auth.signOut();
         console.log('✅ Signed out successfully');
+        
+        // Clear guest mode flag
+        localStorage.removeItem('fitmind_guest_mode');
         
         // Redirect to auth page
         window.location.href = 'auth.html';

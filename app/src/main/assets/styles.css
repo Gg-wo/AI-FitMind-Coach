@@ -1158,6 +1158,17 @@ input:checked + .toggle-slider:before {
     color: var(--text-primary);
 }
 
+/* User Profile Button */
+#userProfileBtn:hover {
+    background: var(--bg-secondary) !important;
+    border-color: var(--accent-primary) !important;
+    transform: scale(1.05);
+}
+
+#userProfileBtn:active {
+    transform: scale(0.95);
+}
+
 /* Mobile Responsive Adjustments */
 @media (max-width: 768px) {
     .settings-menu {
@@ -1170,4 +1181,65 @@ input:checked + .toggle-slider:before {
     .user-profile span {
         display: none;
     }
+}
+
+/* ============================================================ */
+/* LIGHT MODE THEME */
+/* ============================================================ */
+
+body.light-mode {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f1f5f9;
+    --accent-primary: #0891b2;
+    --accent-secondary: #ea580c;
+    --accent-tertiary: #10b981;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --border-color: #e2e8f0;
+}
+
+body.light-mode .bg-pattern {
+    background: 
+        radial-gradient(circle at 20% 50%, rgba(8, 145, 178, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(234, 88, 12, 0.1) 0%, transparent 50%);
+}
+
+body.light-mode .tab-btn {
+    color: var(--text-secondary);
+}
+
+body.light-mode .tab-btn.active {
+    background: var(--accent-primary);
+    color: white;
+}
+
+body.light-mode .card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+body.light-mode .message.user {
+    background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+    color: white;
+}
+
+body.light-mode .message.assistant {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+body.light-mode input, 
+body.light-mode textarea,
+body.light-mode select {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+body.light-mode input:focus,
+body.light-mode textarea:focus,
+body.light-mode select:focus {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
 }

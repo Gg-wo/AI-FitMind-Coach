@@ -1955,29 +1955,42 @@ function updateSettingsUI() {
     const userEmailEl = document.getElementById('userEmail');
     const authButton = document.getElementById('authButton');
     
+    // Check if guest mode
+    const isGuest = localStorage.getItem('fitmind_guest_mode') === 'true';
+    
     if (window.auth && window.auth.currentUser) {
         const user = window.auth.currentUser;
         userEmailEl.textContent = user.email;
+        userEmailEl.style.color = 'var(--text-secondary)';
         authButton.textContent = 'Sign Out';
         authButton.onclick = () => {
             if (window.firebaseSync) {
                 window.firebaseSync.signOut();
             }
         };
+    } else if (isGuest) {
+        userEmailEl.textContent = '👤 Guest Mode';
+        userEmailEl.style.color = 'var(--accent-primary)';
+        authButton.textContent = 'Sign In';
+        authButton.onclick = () => {
+            localStorage.removeItem('fitmind_guest_mode');
+            window.location.href = 'auth.html';
+        };
     } else {
         userEmailEl.textContent = 'Not signed in';
+        userEmailEl.style.color = 'var(--text-muted)';
         authButton.textContent = 'Sign In';
         authButton.onclick = () => {
             window.location.href = 'auth.html';
         };
     }
     
-    // Update preference toggles
-    if (window.firebaseSync && window.firebaseSync.userPreferences) {
-        const prefs = window.firebaseSync.userPreferences;
-        document.getElementById('darkModeToggle').checked = prefs.darkMode !== false;
-        document.getElementById('notificationsToggle').checked = prefs.notifications !== false;
-    }
+    // Load preference toggles from localStorage (works for everyone)
+    const theme = localStorage.getItem('fitmind_theme') || 'dark';
+    const notifications = localStorage.getItem('fitmind_notifications') !== 'false';
+    
+    document.getElementById('darkModeToggle').checked = theme === 'dark';
+    document.getElementById('notificationsToggle').checked = notifications;
 }
 
 /**
@@ -1989,6 +2002,8 @@ function handleAuthAction() {
             window.firebaseSync.signOut();
         }
     } else {
+        // Clear guest mode when navigating to auth
+        localStorage.removeItem('fitmind_guest_mode');
         window.location.href = 'auth.html';
     }
 }
@@ -2005,13 +2020,18 @@ function toggleDarkMode() {
         document.body.classList.add('light-mode');
     }
     
-    // Save to Firebase if available
+    // Save locally (works for both guest and logged-in users)
+    localStorage.setItem('fitmind_theme', enabled ? 'dark' : 'light');
+    
+    // Also save to Firebase if logged in
     if (window.firebaseSync && window.firebaseSync.userPreferences) {
         window.firebaseSync.userPreferences.darkMode = enabled;
         if (window.firebaseSync.saveUserPreferences) {
             window.firebaseSync.saveUserPreferences();
         }
     }
+    
+    console.log(`✅ Theme switched to ${enabled ? 'dark' : 'light'} mode`);
 }
 
 /**
@@ -2020,7 +2040,10 @@ function toggleDarkMode() {
 function toggleNotifications() {
     const enabled = document.getElementById('notificationsToggle').checked;
     
-    // Save to Firebase if available
+    // Save locally (works for both guest and logged-in users)
+    localStorage.setItem('fitmind_notifications', enabled ? 'true' : 'false');
+    
+    // Also save to Firebase if logged in
     if (window.firebaseSync && window.firebaseSync.userPreferences) {
         window.firebaseSync.userPreferences.notifications = enabled;
         if (window.firebaseSync.saveUserPreferences) {
@@ -2028,7 +2051,7 @@ function toggleNotifications() {
         }
     }
     
-    showAlert(enabled ? 'Notifications enabled' : 'Notifications disabled');
+    showAlert(enabled ? '🔔 Notifications enabled' : '🔕 Notifications disabled');
 }
 
 /**
@@ -2075,12 +2098,115 @@ function deleteAllData() {
     });
 }
 
+// ============================================================
+// USER PROFILE MENU
+// ============================================================
+
+/**
+ * Toggle user dropdown menu
+ */
+function toggleUserMenu() {
+    const dropdown = document.getElementById('userDropdown');
+    const isVisible = dropdown.style.display === 'block';
+    
+    if (isVisible) {
+        dropdown.style.display = 'none';
+    } else {
+        dropdown.style.display = 'block';
+    }
+}
+
+/**
+ * Update user email display in dropdown
+ */
+function updateUserEmailDisplay() {
+    const userEmailDisplay = document.getElementById('userEmailDisplay');
+    const isGuest = localStorage.getItem('fitmind_guest_mode') === 'true';
+    
+    if (window.auth && window.auth.currentUser) {
+        const user = window.auth.currentUser;
+        userEmailDisplay.innerHTML = `📧 ${user.email}`;
+    } else if (isGuest) {
+        userEmailDisplay.innerHTML = '👤 Guest Mode';
+    } else {
+        userEmailDisplay.innerHTML = '👤 Not signed in';
+    }
+}
+
+/**
+ * Handle sign out
+ */
+function handleSignOut() {
+    // Close dropdown
+    document.getElementById('userDropdown').style.display = 'none';
+    
+    // Check if Firebase is available
+    if (window.firebaseSync && typeof window.firebaseSync.signOut === 'function') {
+        // Use Firebase sign out
+        window.firebaseSync.signOut();
+    } else {
+        // Manual sign out for guest mode
+        localStorage.removeItem('fitmind_guest_mode');
+        console.log('✅ Guest mode cleared');
+        
+        // Redirect to auth page
+        window.location.href = 'auth.html';
+    }
+}
+
+/**
+ * Open settings tab
+ */
+function openSettings() {
+    // Close dropdown
+    document.getElementById('userDropdown').style.display = 'none';
+    
+    // Switch to settings tab
+    switchTab('settings');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (event) => {
+    const dropdown = document.getElementById('userDropdown');
+    const userBtn = document.getElementById('userProfileBtn');
+    
+    if (dropdown && userBtn && 
+        !dropdown.contains(event.target) && 
+        !userBtn.contains(event.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+/**
+ * Load user preferences from localStorage
+ */
+function loadUserPreferences() {
+    const theme = localStorage.getItem('fitmind_theme') || 'dark';
+    const notifications = localStorage.getItem('fitmind_notifications') !== 'false';
+    
+    // Apply theme immediately
+    if (theme === 'light') {
+        document.body.classList.add('light-mode');
+    } else {
+        document.body.classList.remove('light-mode');
+    }
+    
+    console.log(`✅ Loaded preferences: theme=${theme}, notifications=${notifications}`);
+}
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
+
 // Initialize on load
 // Ensure DOM is ready before updating stats
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 FitMind AI Coach - Initializing...');
     
     try {
+        // Load and apply user preferences FIRST
+        loadUserPreferences();
+        
         // Load stored data from localStorage
         loadWorkoutHistory();
         loadChatSessions();
@@ -2104,6 +2230,9 @@ document.addEventListener('DOMContentLoaded', () => {
         renderHistory();
         renderChatHistory();
         renderChatSidebar();
+        
+        // Update user email display in dropdown
+        updateUserEmailDisplay();
         
         console.log('✅ App initialized - Data persistence active');
     } catch (error) {

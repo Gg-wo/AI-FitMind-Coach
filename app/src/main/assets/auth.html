@@ -38,7 +38,11 @@
             align-items: center;
             justify-content: center;
             color: var(--text-primary);
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            padding-top: max(env(safe-area-inset-top), 40px);
+            padding-bottom: 40px;
         }
         
         .bg-pattern {
@@ -61,18 +65,18 @@
             max-width: 420px;
             background: var(--bg-secondary);
             border-radius: 24px;
-            padding: 48px 40px;
+            padding: 32px 32px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 20px auto;
         }
         
         .logo {
-            text-align: center;
-            margin-bottom: 40px;
+            text-align: cen32px;
         }
         
         .logo-icon {
-            font-size: 64px;
+            font-size: 56px;
             margin-bottom: 16px;
             animation: pulse 2s ease-in-out infinite;
         }
@@ -84,17 +88,17 @@
         
         .logo h1 {
             font-family: 'Chakra Petch', sans-serif;
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 700;
             background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         
         .logo p {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-muted);
         }
         
@@ -267,18 +271,24 @@
         .skip-link {
             text-align: center;
             margin-top: 24px;
-            font-size: 13px;
-            color: var(--text-muted);
         }
         
-        .skip-link a {
-            color: var(--accent-primary);
-            text-decoration: none;
+        .btn-guest {
+            width: 100%;
+            padding: 14px;
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 15px;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
         }
         
-        .skip-link a:hover {
-            text-decoration: underline;
+        .btn-guest:hover {
+            border-color: var(--accent-primary);
+            background: rgba(0, 212, 255, 0.1);
         }
         
         .loading {
@@ -367,7 +377,7 @@
         </button>
         
         <div class="skip-link">
-            <a href="index.html">Skip for now (use offline mode)</a>
+            <button class="btn-guest" onclick="handleGuestMode()">👤 Continue as Guest</button>
         </div>
         
         <div id="loading" class="loading">
@@ -438,6 +448,7 @@
             
             try {
                 await auth.signInWithEmailAndPassword(email, password);
+                localStorage.removeItem('fitmind_guest_mode');
                 showMessage('Sign in successful! Redirecting...', 'success');
                 setTimeout(() => {
                     window.location.href = 'index.html';
@@ -487,10 +498,12 @@
             
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
-                showMessage('Account created! Redirecting...', 'success');
+                localStorage.removeItem('fitmind_guest_mode');
+                showMessage('Account created! Please sign in with your credentials.', 'success');
                 setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 1500);
+                    switchAuthTab('signin');
+                    hideMessage();
+                }, 2000);
             } catch (error) {
                 hideLoading();
                 let errorMessage = 'Sign up failed. Please try again.';
@@ -524,6 +537,7 @@
             try {
                 const provider = new firebase.auth.GoogleAuthProvider();
                 await auth.signInWithPopup(provider);
+                localStorage.removeItem('fitmind_guest_mode');
                 showMessage('Sign in successful! Redirecting...', 'success');
                 setTimeout(() => {
                     window.location.href = 'index.html';
@@ -536,11 +550,25 @@
             }
         }
         
-        // Check if user is already signed in
-        if (window.auth) {
+        function handleGuestMode() {
+            // Set guest mode flag in localStorage
+            localStorage.setItem('fitmind_guest_mode', 'true');
+            console.log('✅ Guest mode enabled');
+            
+            // Redirect to main app
+            window.location.href = 'index.html';
+        }
+        
+        // Check if user is already signed in OR guest mode is enabled
+        const guestMode = localStorage.getItem('fitmind_guest_mode');
+        if (guestMode === 'true') {
+            console.log('✅ Guest mode detected, redirecting to app...');
+            window.location.href = 'index.html';
+        } else if (window.auth) {
             auth.onAuthStateChanged(user => {
                 if (user) {
                     // User is signed in, redirect to app
+                    console.log('✅ User signed in, redirecting to app...');
                     window.location.href = 'index.html';
                 }
             });

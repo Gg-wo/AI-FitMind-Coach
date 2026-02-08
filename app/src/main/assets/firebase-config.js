@@ -12,12 +12,13 @@
  */
 
 const FIREBASE_CONFIG = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef123456"
+    apiKey: "AIzaSyCwHwAmOu1HRWtfoc3-7IbmszIUu1t-M4E",
+    authDomain: "fitmind-ai-eba88.firebaseapp.com",
+    projectId: "fitmind-ai-eba88",
+    storageBucket: "fitmind-ai-eba88.firebasestorage.app",
+    messagingSenderId: "695472345697",
+    appId: "1:695472345697:web:8556e2d665634b7a0dd020",
+    measurementId: "G-RPYQJYTREE"
 };
 
 // Initialize Firebase
