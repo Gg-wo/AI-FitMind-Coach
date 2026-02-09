@@ -1863,12 +1863,25 @@ function renderActivityOverview() {
     });
 }
 
-// Handle suggestion button clicks - Auto-send message
+// Handle suggestion button clicks
 function useSuggestion(fullQuestion) {
     const input = document.getElementById('coachQuestion');
     if (input) {
         input.value = fullQuestion;
-        askCoach(); // Auto-send the message
+        input.focus();
+        // Optionally auto-submit
+        // askCoach();
+    }
+}
+
+// Handle suggestion button clicks
+function useSuggestion(fullQuestion) {
+    const input = document.getElementById('coachQuestion');
+    if (input) {
+        input.value = fullQuestion;
+        input.focus();
+        // Optionally auto-submit
+        // askCoach();
     }
 }
 
