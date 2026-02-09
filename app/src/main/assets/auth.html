@@ -64,20 +64,21 @@
             width: 90%;
             max-width: 420px;
             background: var(--bg-secondary);
-            border-radius: 24px;
-            padding: 32px 32px;
+            border-radius: 20px;
+            padding: 24px 28px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.1);
             margin: 20px auto;
         }
         
         .logo {
-            text-align: cen32px;
+            text-align: center;
+            margin-bottom: 24px;
         }
         
         .logo-icon {
-            font-size: 56px;
-            margin-bottom: 16px;
+            font-size: 48px;
+            margin-bottom: 24px;
             animation: pulse 2s ease-in-out infinite;
         }
         
@@ -88,24 +89,24 @@
         
         .logo h1 {
             font-family: 'Chakra Petch', sans-serif;
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 700;
             background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
         
         .logo p {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
         }
         
         .tab-selector {
             display: flex;
             gap: 8px;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
             background: var(--bg-tertiary);
             border-radius: 12px;
             padding: 4px;
@@ -138,27 +139,27 @@
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
         
         .form-group label {
             display: block;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             color: var(--text-secondary);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         
         .form-group input {
             width: 100%;
-            padding: 14px 16px;
+            padding: 12px 14px;
             background: var(--bg-tertiary);
             border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+            border-radius: 10px;
             color: var(--text-primary);
-            font-size: 15px;
+            font-size: 14px;
             font-family: 'Outfit', sans-serif;
             transition: all 0.3s;
         }
@@ -171,12 +172,12 @@
         
         .btn-primary {
             width: 100%;
-            padding: 16px;
+            padding: 14px;
             background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             color: white;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
@@ -199,7 +200,7 @@
         
         .divider {
             text-align: center;
-            margin: 24px 0;
+            margin: 20px 0;
             position: relative;
         }
         
@@ -270,7 +271,7 @@
         
         .skip-link {
             text-align: center;
-            margin-top: 24px;
+            margin-top: 20px;
         }
         
         .btn-guest {
@@ -394,6 +395,66 @@
     <script src="firebase-config.js"></script>
     
     <script>
+        // Flag to prevent auto-redirect during signup process
+        let isSigningUp = false;
+        
+        // Custom confirm dialog for better UX
+        function showCustomConfirmDialog(message, onConfirm) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 100000;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: var(--bg-secondary);
+                border: 1px solid var(--border-color);
+                border-radius: 16px;
+                padding: 24px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            `;
+            
+            dialog.innerHTML = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+                    <div style="color: var(--text-primary); font-size: 18px; font-weight: 600; margin-bottom: 8px;">Account Created!</div>
+                    <div style="color: var(--text-secondary); font-size: 14px;">${message}</div>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button id="confirmBtn" style="
+                        flex: 1;
+                        padding: 12px;
+                        background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+                        border: none;
+                        border-radius: 10px;
+                        color: white;
+                        font-size: 15px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">Got it!</button>
+                </div>
+            `;
+            
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            
+            dialog.querySelector('#confirmBtn').onclick = () => {
+                document.body.removeChild(overlay);
+                onConfirm();
+            };
+        }
+        
         function switchAuthTab(tab) {
             // Update tab buttons
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -495,15 +556,30 @@
             }
             
             showLoading();
+            isSigningUp = true; // Prevent auto-redirect
             
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
+                // Sign out immediately to prevent auto-login
+                await auth.signOut();
                 localStorage.removeItem('fitmind_guest_mode');
-                showMessage('Account created! Please sign in with your credentials.', 'success');
+                
+                hideLoading();
+                isSigningUp = false;
+                
+                // Show success message with custom confirm dialog
+                showMessage('Account created successfully! 🎉', 'success');
+                
+                // Show custom confirm dialog
                 setTimeout(() => {
-                    switchAuthTab('signin');
-                    hideMessage();
-                }, 2000);
+                    showCustomConfirmDialog('Please sign in with your new credentials.', () => {
+                        switchAuthTab('signin');
+                        hideMessage();
+                        // Pre-fill email for convenience
+                        document.getElementById('signinEmail').value = email;
+                        document.getElementById('signinPassword').focus();
+                    });
+                }, 300);
             } catch (error) {
                 hideLoading();
                 let errorMessage = 'Sign up failed. Please try again.';
@@ -566,8 +642,8 @@
             window.location.href = 'index.html';
         } else if (window.auth) {
             auth.onAuthStateChanged(user => {
-                if (user) {
-                    // User is signed in, redirect to app
+                // Only redirect if user is signed in AND we're not in signup process
+                if (user && !isSigningUp) {
                     console.log('✅ User signed in, redirecting to app...');
                     window.location.href = 'index.html';
                 }
