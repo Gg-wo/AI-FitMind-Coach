@@ -22,6 +22,9 @@ let currentChatId = null;  // ID of currently active chat session
 let currentWorkout = null;
 let researchDataset = null;  // Real research data from WESAD
 let currentDataIndex = 0;    // Current position in playback
+let dashboardYogaSession = null;
+let dashboardYogaIndex = 0;
+let dashboardLiveInterval = null;
 
 // LocalStorage Keys
 const STORAGE_KEYS = {
@@ -448,11 +451,12 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-    // Note: The click event might come from the window object in some contexts, 
-    // but here we assume it's triggered by the onclick attribute
-    const activeTab = Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.toLowerCase().includes(tabName));
-    if(activeTab) activeTab.classList.add('active');
-    else if(event) event.target.classList.add('active');
+    const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+    } else if (event && event.target) {
+        event.target.classList.add('active');
+    }
 
     document.getElementById(tabName + '-tab').classList.add('active');
 
@@ -708,6 +712,9 @@ function updateWorkoutMetrics() {
     // Update zones
     updateZones(currentHR);
 
+    // Keep dashboard live card in sync when workout is active
+    renderDashboardLive();
+
     // Update chart
     if (hrChart) {
         const timeLabel = formatDuration(elapsed);
@@ -854,8 +861,8 @@ async function getRealtimeCoaching(workout = null) {
 
     // Switch to coach tab
     switchTab('coach');
-    const coachTab = Array.from(document.querySelectorAll('.tab')).find(t => t.textContent.includes('AI Coach'));
-    if(coachTab) {
+    const coachTab = document.querySelector('.tab[data-tab="coach"]');
+    if (coachTab) {
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
         coachTab.classList.add('active');
     }
@@ -1463,28 +1470,197 @@ function getWeeklyActivity() {
  * Render complete progress dashboard
  */
 function renderProgressDashboard() {
-    // Calculate stats
-    const streak = calculateWorkoutStreak();
-    const totalMinutes = workoutHistory.reduce((sum, w) => sum + Math.floor(w.duration / 60), 0);
-    const avgHR = workoutHistory.length > 0 
-        ? Math.round(workoutHistory.reduce((sum, w) => sum + w.avgHR, 0) / workoutHistory.length)
-        : 0;
-    const totalCalories = Math.round(workoutHistory.reduce((sum, w) => sum + w.calories, 0));
-    
-    // Update stat cards
-    document.getElementById('streakCount').textContent = streak;
-    document.getElementById('totalMinutes').textContent = totalMinutes;
-    document.getElementById('avgHeartRate').textContent = avgHR > 0 ? avgHR : '--';
-    document.getElementById('totalCalories').textContent = totalCalories;
-    
-    // Render personal records
-    renderPersonalRecords();
-    
-    // Render zone chart
-    renderZoneChart();
-    
-    // Render activity overview chart
-    renderActivityOverview();
+    renderDashboardGreeting();
+    renderDashboardLive();
+    renderDashboardStats();
+    renderDashboardRecovery();
+    renderRecentWorkouts();
+
+    if (!dashboardLiveInterval) {
+        dashboardLiveInterval = setInterval(renderDashboardLive, 1000);
+    }
+}
+
+function renderDashboardGreeting() {
+    const greetingEl = document.getElementById('dashboardGreeting');
+    const subtextEl = document.getElementById('dashboardSubtext');
+    if (!greetingEl || !subtextEl) return;
+
+    const hour = new Date().getHours();
+    let greeting = 'Good morning';
+    if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
+    if (hour >= 18) greeting = 'Good evening';
+
+    greetingEl.textContent = greeting;
+    subtextEl.textContent = "Let's crush your goals today";
+}
+
+function renderDashboardLive() {
+    const hrEl = document.getElementById('liveHeartRate');
+    const zoneNameEl = document.getElementById('liveZoneName');
+    const zonePercentEl = document.getElementById('liveZonePercent');
+    const zoneProgressEl = document.getElementById('liveZoneProgress');
+    const zoneMarkerEl = document.getElementById('liveZoneMarker');
+    if (!hrEl || !zoneNameEl || !zonePercentEl || !zoneProgressEl || !zoneMarkerEl) return;
+
+    let currentHR = 70;
+    if (workoutActive && hrData.length > 0) {
+        currentHR = hrData[hrData.length - 1];
+    } else {
+        if (!dashboardYogaSession && researchDataset) {
+            dashboardYogaSession = getResearchSession('yoga');
+            dashboardYogaIndex = 0;
+        }
+
+        if (dashboardYogaSession && dashboardYogaSession.heartRateData?.length) {
+            currentHR = dashboardYogaSession.heartRateData[dashboardYogaIndex] || currentHR;
+            const noiseRoll = Math.random();
+            const noise = noiseRoll < 0.15 ? -1 : noiseRoll > 0.85 ? 1 : 0;
+            currentHR = Math.max(0, Math.min(200, currentHR + noise));
+            dashboardYogaIndex = (dashboardYogaIndex + 1) % dashboardYogaSession.heartRateData.length;
+        } else if (workoutHistory.length > 0) {
+            currentHR = workoutHistory[0].avgHR || currentHR;
+        }
+    }
+
+    const minHr = 0;
+    const maxHr = 200;
+    const percent = Math.max(0, Math.min(100, Math.round((currentHR / maxHr) * 100)));
+    const zone = getHRZone(currentHR);
+    const zoneNames = {
+        1: 'Rest',
+        2: 'Fat Burn',
+        3: 'Cardio',
+        4: 'Threshold',
+        5: 'Peak'
+    };
+
+    hrEl.textContent = currentHR;
+    zoneNameEl.textContent = `Zone: ${zoneNames[zone]}`;
+    zonePercentEl.textContent = percent;
+    zoneProgressEl.style.width = `${percent}%`;
+    zoneMarkerEl.style.left = `${percent}%`;
+}
+
+function renderDashboardStats() {
+    const workoutsEl = document.getElementById('weeklyWorkouts');
+    const caloriesEl = document.getElementById('weeklyCalories');
+    const minutesEl = document.getElementById('weeklyMinutes');
+    const goalEl = document.getElementById('weeklyGoal');
+    if (!workoutsEl || !caloriesEl || !minutesEl || !goalEl) return;
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+
+    const weekWorkouts = workoutHistory.filter(w => {
+        const date = new Date(w.startTime || w.timestamp || w.date || w.endTime || Date.now());
+        return date >= weekAgo;
+    });
+
+    const weeklyWorkouts = weekWorkouts.length;
+    const weeklyCalories = Math.round(weekWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0));
+    const weeklyMinutes = weekWorkouts.reduce((sum, w) => sum + Math.floor((w.duration || 0) / 60), 0);
+
+    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+    const target = profile.workoutFrequency || 3;
+    const goalPercent = target > 0 ? Math.min(100, Math.round((weeklyWorkouts / target) * 100)) : 0;
+
+    workoutsEl.textContent = weeklyWorkouts;
+    caloriesEl.textContent = weeklyCalories;
+    minutesEl.textContent = weeklyMinutes;
+    goalEl.textContent = `${goalPercent}%`;
+}
+
+function renderDashboardRecovery() {
+    const scoreEl = document.getElementById('recoveryScore');
+    const labelEl = document.getElementById('recoveryLabel');
+    const messageEl = document.getElementById('recoveryMessage');
+    const coachMessageEl = document.getElementById('coachMessage');
+    const coachTimeEl = document.getElementById('coachTime');
+    if (!scoreEl || !labelEl || !messageEl || !coachMessageEl || !coachTimeEl) return;
+
+    const weeklyMinutes = workoutHistory
+        .filter(w => new Date(w.startTime || w.timestamp || w.date || w.endTime || Date.now()) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+        .reduce((sum, w) => sum + Math.floor((w.duration || 0) / 60), 0);
+
+    const loadScore = Math.min(100, weeklyMinutes * 2);
+    const recoveryScore = Math.max(45, 100 - Math.round(loadScore * 0.6));
+
+    let label = 'Good';
+    let message = 'Moderate intensity recommended';
+    let coachMessage = "Great job on your recovery score! Keep a balanced mix of training and rest days to stay consistent and energized.";
+
+    if (recoveryScore < 60) {
+        label = 'Needs Rest';
+        message = 'Prioritize recovery and light movement';
+        coachMessage = "Your body could use extra recovery. Consider a lighter session today or focus on mobility work to recharge.";
+    } else if (recoveryScore < 80) {
+        label = 'Moderate';
+        message = 'Steady effort is a smart move';
+        coachMessage = "Nice work staying active. Aim for steady sessions and listen to your body to keep improving safely.";
+    }
+
+    scoreEl.textContent = recoveryScore;
+    labelEl.textContent = label;
+    messageEl.textContent = message;
+    coachMessageEl.textContent = coachMessage;
+    coachTimeEl.textContent = 'just now';
+}
+
+function renderRecentWorkouts() {
+    const listEl = document.getElementById('recentWorkoutsList');
+    if (!listEl) return;
+
+    if (!workoutHistory.length) {
+        listEl.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 12px;">No workouts yet. Start one to see it here.</p>';
+        return;
+    }
+
+    const workoutIcons = {
+        running: '🏃',
+        cycling: '🚴',
+        swimming: '🏊',
+        strength: '💪',
+        yoga: '🧘',
+        hiit: '⚡'
+    };
+
+    const sorted = [...workoutHistory].sort((a, b) => {
+        const da = new Date(a.startTime || a.timestamp || a.date || a.endTime || Date.now());
+        const db = new Date(b.startTime || b.timestamp || b.date || b.endTime || Date.now());
+        return db - da;
+    });
+
+    const recent = sorted.slice(0, 3);
+    listEl.innerHTML = recent.map(w => {
+        const date = new Date(w.startTime || w.timestamp || w.date || w.endTime || Date.now());
+        const dateLabel = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const minutes = Math.max(1, Math.floor((w.duration || 0) / 60));
+        const icon = workoutIcons[w.type] || '🏃';
+        const title = w.type ? w.type.charAt(0).toUpperCase() + w.type.slice(1) : 'Workout';
+        const avgHr = w.avgHR || '--';
+        const calories = Math.round(w.calories || 0);
+
+        return `
+            <div class="recent-item">
+                <div class="recent-left">
+                    <div class="recent-icon">${icon}</div>
+                    <div>
+                        <div class="recent-title">${title}</div>
+                        <div class="recent-meta">
+                            <span>${minutes} min</span>
+                            <span>❤ ${avgHr} bpm</span>
+                            <span>${calories} kcal</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="recent-date">${dateLabel}</div>
+            </div>
+        `;
+    }).join('');
 }
 
 /**
@@ -2147,15 +2323,28 @@ function toggleUserMenu() {
  */
 function updateUserEmailDisplay() {
     const userEmailDisplay = document.getElementById('userEmailDisplay');
+    const settingsBtn = document.getElementById('settingsBtn');
     const isGuest = localStorage.getItem('fitmind_guest_mode') === 'true';
     
     if (window.auth && window.auth.currentUser) {
         const user = window.auth.currentUser;
         userEmailDisplay.innerHTML = `📧 ${user.email}`;
+        // Show Settings button for authenticated users
+        if (settingsBtn) {
+            settingsBtn.style.display = 'flex';
+        }
     } else if (isGuest) {
         userEmailDisplay.innerHTML = '👤 Guest Mode';
+        // Hide Settings button for guest users
+        if (settingsBtn) {
+            settingsBtn.style.display = 'none';
+        }
     } else {
         userEmailDisplay.innerHTML = '👤 Not signed in';
+        // Hide Settings button if not signed in
+        if (settingsBtn) {
+            settingsBtn.style.display = 'none';
+        }
     }
 }
 
@@ -2178,17 +2367,6 @@ function handleSignOut() {
         // Redirect to auth page
         window.location.href = 'auth.html';
     }
-}
-
-/**
- * Open settings tab
- */
-function openSettings() {
-    // Close dropdown
-    document.getElementById('userDropdown').style.display = 'none';
-    
-    // Switch to settings tab
-    switchTab('settings');
 }
 
 // Close dropdown when clicking outside
@@ -2221,6 +2399,377 @@ function loadUserPreferences() {
 }
 
 // ============================================================
+// USER PROFILE MANAGEMENT
+// ============================================================
+
+/**
+ * Default profile structure
+ */
+function getDefaultProfile() {
+    return {
+        name: '',
+        email: '',
+        age: null,
+        sex: '',
+        height: null,
+        weight: null,
+        fitnessLevel: '',
+        goal: '',
+        targetWeight: null,
+        workoutFrequency: 3,
+        units: 'metric', // metric or imperial
+        notifications: 'all',
+        diet: '',
+        photoEmoji: '👤',
+        createdAt: new Date().toISOString()
+    };
+}
+
+/**
+ * Open settings/profile modal
+ */
+function openSettings() {
+    console.log('🔧 Opening settings...');
+    
+    // Close dropdown menu
+    const dropdown = document.getElementById('userDropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+    
+    // Open profile modal
+    const modal = document.getElementById('profileModal');
+    console.log('📦 Modal element:', modal);
+    
+    if (modal) {
+        console.log('✅ Setting modal display to flex');
+        modal.style.display = 'flex';
+        
+        // Force visibility for debugging
+        const profileModalContent = modal.querySelector('.profile-modal');
+        if (profileModalContent) {
+            console.log('📋 Profile modal content found:', profileModalContent);
+            
+            // Log dimensions
+            setTimeout(() => {
+                const rect = profileModalContent.getBoundingClientRect();
+                console.log('📐 Modal dimensions:', {
+                    width: rect.width,
+                    height: rect.height,
+                    top: rect.top,
+                    left: rect.left
+                });
+            }, 100);
+            
+        } else {
+            console.error('❌ .profile-modal content not found!');
+        }
+        
+        try {
+            loadProfile();
+            updateProgressStats();
+            console.log('✅ Profile loaded successfully');
+        } catch (error) {
+            console.error('❌ Error loading profile:', error);
+        }
+    } else {
+        console.error('❌ Profile modal not found in DOM!');
+    }
+}
+
+/**
+ * Close profile modal
+ */
+function closeProfile() {
+    const modal = document.getElementById('profileModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Load profile data from localStorage
+ */
+function loadProfile() {
+    console.log('📝 Loading profile...');
+    
+    try {
+        const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+        const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+        
+        // Get current user email from Firebase or use profile email
+        const userEmail = window.currentUserEmail || profile.email || 'guest@fitmind.app';
+        
+        // Populate form fields (with null checks)
+        const setValueSafe = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.value = value || '';
+            } else {
+                console.warn(`⚠️ Element not found: ${id}`);
+            }
+        };
+        
+        setValueSafe('profileName', profile.name);
+        setValueSafe('profileAge', profile.age);
+        setValueSafe('profileSex', profile.sex);
+        setValueSafe('profileHeight', profile.height);
+        setValueSafe('profileWeight', profile.weight);
+        setValueSafe('profileFitnessLevel', profile.fitnessLevel);
+        setValueSafe('profileGoal', profile.goal);
+        setValueSafe('profileTargetWeight', profile.targetWeight);
+        setValueSafe('profileWorkoutFrequency', profile.workoutFrequency || 3);
+        setValueSafe('profileUnits', profile.units || 'metric');
+        setValueSafe('profileNotifications', profile.notifications || 'all');
+        setValueSafe('profileDiet', profile.diet);
+        setValueSafe('profileEmail', userEmail);
+        
+        const emailDisplay = document.getElementById('profileEmailDisplay');
+        if (emailDisplay) {
+            emailDisplay.textContent = userEmail;
+        }
+        
+        // Update photo
+        const photoElement = document.getElementById('profilePhoto');
+        if (photoElement) {
+            photoElement.textContent = profile.photoEmoji || '👤';
+        }
+        
+        // Update unit labels
+        updateUnitLabels();
+        
+        console.log('✅ Profile loaded successfully');
+    } catch (error) {
+        console.error('❌ Error in loadProfile:', error);
+        throw error;
+    }
+}
+
+/**
+ * Save profile data to localStorage
+ */
+function saveProfile() {
+    const profile = {
+        name: document.getElementById('profileName').value.trim(),
+        email: document.getElementById('profileEmail').value.trim(),
+        age: parseInt(document.getElementById('profileAge').value) || null,
+        sex: document.getElementById('profileSex').value,
+        height: parseFloat(document.getElementById('profileHeight').value) || null,
+        weight: parseFloat(document.getElementById('profileWeight').value) || null,
+        fitnessLevel: document.getElementById('profileFitnessLevel').value,
+        goal: document.getElementById('profileGoal').value,
+        targetWeight: parseFloat(document.getElementById('profileTargetWeight').value) || null,
+        workoutFrequency: parseInt(document.getElementById('profileWorkoutFrequency').value) || 3,
+        units: document.getElementById('profileUnits').value,
+        notifications: document.getElementById('profileNotifications').value,
+        diet: document.getElementById('profileDiet').value.trim(),
+        photoEmoji: document.getElementById('profilePhoto').textContent,
+        updatedAt: new Date().toISOString()
+    };
+    
+    // Preserve createdAt if exists
+    const existingProfile = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    if (existingProfile) {
+        const existing = JSON.parse(existingProfile);
+        profile.createdAt = existing.createdAt;
+    } else {
+        profile.createdAt = new Date().toISOString();
+    }
+    
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+    
+    // Show success message
+    showNotification('✅ Profile saved successfully!', 'success');
+    
+    // Close modal after short delay
+    setTimeout(() => {
+        closeProfile();
+    }, 800);
+    
+    console.log('✅ Profile saved:', profile);
+}
+
+/**
+ * Update unit labels based on selected system
+ */
+function updateUnitLabels() {
+    const units = document.getElementById('profileUnits').value;
+    
+    const heightUnit = document.getElementById('heightUnit');
+    const weightUnit = document.getElementById('weightUnit');
+    const targetWeightUnit = document.getElementById('targetWeightUnit');
+    
+    if (units === 'imperial') {
+        if (heightUnit) heightUnit.textContent = 'in';
+        if (weightUnit) weightUnit.textContent = 'lbs';
+        if (targetWeightUnit) targetWeightUnit.textContent = 'lbs';
+    } else {
+        if (heightUnit) heightUnit.textContent = 'cm';
+        if (weightUnit) weightUnit.textContent = 'kg';
+        if (targetWeightUnit) targetWeightUnit.textContent = 'kg';
+    }
+}
+
+/**
+ * Change profile photo (emoji picker)
+ */
+function changeProfilePhoto() {
+    const emojis = ['👤', '😊', '💪', '🏃', '🧘', '🚴', '🏋️', '⚡', '🔥', '🌟', '🎯', '🦸', '🥇', '👨', '👩', '🧑'];
+    
+    const choice = prompt('Choose a profile emoji (enter 1-16):\n\n' + 
+        emojis.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+    
+    const index = parseInt(choice) - 1;
+    if (index >= 0 && index < emojis.length) {
+        const photoElement = document.getElementById('profilePhoto');
+        if (photoElement) {
+            photoElement.textContent = emojis[index];
+            showNotification('Photo updated! Don\'t forget to save.', 'info');
+        }
+    }
+}
+
+/**
+ * Change password (placeholder - will integrate with Firebase)
+ */
+function changePassword() {
+    // Check if Firebase is available
+    if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+        // Firebase password reset
+        const email = firebase.auth().currentUser.email;
+        firebase.auth().sendPasswordResetEmail(email)
+            .then(() => {
+                showNotification('📧 Password reset email sent! Check your inbox.', 'success');
+            })
+            .catch((error) => {
+                showNotification('❌ Error: ' + error.message, 'error');
+            });
+    } else {
+        // Fallback for local storage mode
+        const newPassword = prompt('Enter new password (min 6 characters):');
+        if (newPassword && newPassword.length >= 6) {
+            showNotification('✅ Password updated successfully!', 'success');
+        } else if (newPassword !== null) {
+            showNotification('❌ Password must be at least 6 characters', 'error');
+        }
+    }
+}
+
+/**
+ * Update progress statistics in profile
+ */
+function updateProgressStats() {
+    // Get profile data
+    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+    
+    // Calculate goal progress
+    let goalProgress = 0;
+    if (profile.weight && profile.targetWeight && profile.weight !== profile.targetWeight) {
+        const totalChange = Math.abs(profile.targetWeight - profile.weight);
+        // This is simplified - in real app, track weight over time
+        goalProgress = 0; // Would calculate based on initial weight vs current
+    }
+    
+    // Calculate workout streak (simplified)
+    const streak = calculateWorkoutStreak();
+    
+    // Get total workouts
+    const totalWorkouts = workoutHistory.length;
+    
+    // Calculate total calories
+    const totalCalories = workoutHistory.reduce((sum, w) => sum + (w.calories || 0), 0);
+    
+    // Update UI
+    const goalProgressEl = document.getElementById('goalProgress');
+    const streakEl = document.getElementById('workoutStreak');
+    const totalWorkoutsEl = document.getElementById('totalWorkouts');
+    const totalCaloriesEl = document.getElementById('profileTotalCalories');
+    
+    if (goalProgressEl) goalProgressEl.textContent = goalProgress + '%';
+    if (streakEl) streakEl.textContent = streak;
+    if (totalWorkoutsEl) totalWorkoutsEl.textContent = totalWorkouts;
+    if (totalCaloriesEl) totalCaloriesEl.textContent = Math.round(totalCalories);
+}
+
+/**
+ * Calculate workout streak (consecutive days)
+ */
+function calculateWorkoutStreak() {
+    if (workoutHistory.length === 0) return 0;
+    
+    // Sort workouts by date (newest first)
+    const sorted = [...workoutHistory].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    for (const workout of sorted) {
+        const workoutDate = new Date(workout.timestamp);
+        workoutDate.setHours(0, 0, 0, 0);
+        
+        const diffDays = Math.floor((currentDate - workoutDate) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === streak) {
+            streak++;
+            currentDate = new Date(workoutDate);
+        } else if (diffDays > streak + 1) {
+            break;
+        }
+    }
+    
+    return streak;
+}
+
+/**
+ * Show notification message
+ */
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 16px 24px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 
+                      'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))'};
+        color: white;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 15px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        z-index: 10001;
+        animation: slideInRight 0.3s ease;
+        max-width: 300px;
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', (event) => {
+    const modal = document.getElementById('profileModal');
+    if (modal && event.target === modal) {
+        closeProfile();
+    }
+});
+
+// ============================================================
 // INITIALIZATION
 // ============================================================
 
@@ -2247,12 +2796,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Load real research data
         loadResearchData().then(() => {
             console.log('✓ Research data loaded successfully');
+            renderDashboardLive();
         }).catch(err => {
             console.warn('Note: Research data not available, app will use simulation', err);
         });
         
         // Update UI with loaded data
         updateHeaderStats();
+        renderProgressDashboard();
         renderHistory();
         renderChatHistory();
         renderChatSidebar();

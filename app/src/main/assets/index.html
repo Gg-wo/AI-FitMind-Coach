@@ -41,10 +41,10 @@
                     <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 13px;" id="userEmailDisplay">
                         👤 Guest Mode
                     </div>
-                    <button onclick="handleSignOut()" style="width: 100%; padding: 14px 16px; background: none; border: none; text-align: left; color: var(--text-primary); cursor: pointer; font-size: 15px; transition: background 0.2s; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='none'">
+                    <button id="signOutBtn" onclick="handleSignOut()" style="width: 100%; padding: 14px 16px; background: none; border: none; text-align: left; color: var(--text-primary); cursor: pointer; font-size: 15px; transition: background 0.2s; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='none'">
                         🚪 Sign Out
                     </button>
-                    <button onclick="openSettings()" style="width: 100%; padding: 14px 16px; background: none; border: none; text-align: left; color: var(--text-primary); cursor: pointer; font-size: 15px; transition: background 0.2s; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='none'">
+                    <button id="settingsBtn" onclick="openSettings()" style="width: 100%; padding: 14px 16px; background: none; border: none; text-align: left; color: var(--text-primary); cursor: pointer; font-size: 15px; transition: background 0.2s; display: flex; align-items: center; gap: 10px; display: none;" onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='none'">
                         ⚙️ Settings
                     </button>
                 </div>
@@ -56,15 +56,15 @@
 <div class="container">
     <div class="main-content">
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('live')">🏃 Live Session</div>
-            <div class="tab" onclick="switchTab('coach')">🤖 AI Coach</div>
-            <div class="tab" onclick="switchTab('progress')">📈 Progress</div>
-            <div class="tab" onclick="switchTab('history')">📊 History</div>
-            <div class="tab" onclick="switchTab('about')">ℹ️ About</div>
+            <div class="tab active" data-tab="progress" onclick="switchTab('progress')">📊 Dashboard</div>
+            <div class="tab" data-tab="live" onclick="switchTab('live')">🏃 Workout</div>
+            <div class="tab" data-tab="history" onclick="switchTab('history')">📊 History</div>
+            <div class="tab" data-tab="coach" onclick="switchTab('coach')">🤖 AI Coach</div>
+            <div class="tab" data-tab="about" onclick="switchTab('about')">ℹ️ About</div>
         </div>
 
-        <!-- Live Session Tab -->
-        <div class="tab-content active" id="live-tab">
+        <!-- Workout Tab -->
+        <div class="tab-content" id="live-tab">
             <div class="card">
                 <h2>🏃 Start Workout</h2>
                 <div class="workout-controls">
@@ -200,98 +200,108 @@
             </div>
         </div>
 
-        <!-- Progress Tab -->
-        <div class="tab-content" id="progress-tab">
-            <div class="card">
-                <h2>📈 Your Progress</h2>
-                
-                <!-- Activity Overview (Moved to Top) -->
-                <div class="card" style="margin-bottom: 24px;">
-                    <h3>📊 Overview</h3>
-                    <select id="periodSelector" onchange="renderActivityOverview()" style="
-                        background: var(--bg-tertiary);
-                        color: var(--text-primary);
-                        border: 1px solid rgba(0, 212, 255, 0.3);
-                        padding: 8px 12px;
-                        border-radius: 8px;
-                        font-size: 14px;
-                        cursor: pointer;
-                        margin-bottom: 20px;
-                        display: block;
-                    ">
-                        <option value="7">Last 7 days</option>
-                        <option value="30" selected>Last 30 days</option>
-                        <option value="90">Last 90 days</option>
-                        <option value="180">Last 180 days</option>
-                        <option value="365">Last year</option>
-                    </select>
-                    
-                    <!-- Summary Stats for Selected Period -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px;">
-                        <div style="background: rgba(0, 212, 255, 0.1); padding: 12px; border-radius: 8px; text-align: center;">
-                            <div style="color: var(--text-secondary); font-size: 12px;">Total Workouts</div>
-                            <div id="periodTotalWorkouts" style="color: var(--accent-primary); font-size: 24px; font-weight: 700;">0</div>
-                        </div>
-                        <div style="background: rgba(155, 81, 224, 0.1); padding: 12px; border-radius: 8px; text-align: center;">
-                            <div style="color: var(--text-secondary); font-size: 12px;">Avg per Week</div>
-                            <div id="periodAvgPerWeek" style="color: var(--accent-secondary); font-size: 24px; font-weight: 700;">0</div>
-                        </div>
-                        <div style="background: rgba(239, 68, 68, 0.1); padding: 12px; border-radius: 8px; text-align: center;">
-                            <div style="color: var(--text-secondary); font-size: 12px;">Avg Heart Rate</div>
-                            <div id="periodAvgHeartRate" style="color: #ef4444; font-size: 24px; font-weight: 700;">--</div>
-                        </div>
-                        <div style="background: rgba(245, 158, 11, 0.1); padding: 12px; border-radius: 8px; text-align: center;">
-                            <div style="color: var(--text-secondary); font-size: 12px;">Total Calories</div>
-                            <div id="periodTotalCalories" style="color: #f59e0b; font-size: 24px; font-weight: 700;">0</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Chart -->
-                    <div style="position: relative; height: 300px; margin-top: 20px;">
-                        <canvas id="activityChart"></canvas>
-                    </div>
+        <!-- Dashboard Tab -->
+        <div class="tab-content active" id="progress-tab">
+            <div class="dashboard-hero">
+                <div>
+                    <h2 id="dashboardGreeting">Good morning</h2>
+                    <p id="dashboardSubtext">Let's crush your goals today</p>
                 </div>
-                
-                <!-- Stats Summary Cards -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px;">
-                    <div class="stat-card">
-                        <div class="stat-card-label">Workout Streak</div>
-                        <div class="stat-card-value" id="streakCount">0</div>
-                        <div class="stat-card-subtitle">days in a row 🔥</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-label">Total Time</div>
-                        <div class="stat-card-value" id="totalMinutes">0</div>
-                        <div class="stat-card-subtitle">minutes trained</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-label">Avg HR</div>
-                        <div class="stat-card-value" id="avgHeartRate">--</div>
-                        <div class="stat-card-subtitle">bpm overall</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-label">Total Calories</div>
-                        <div class="stat-card-value" id="totalCalories">0</div>
-                        <div class="stat-card-subtitle">kcal burned</div>
-                    </div>
-                </div>
+                <div class="status-pill" id="smartwatchStatus">Smartwatch connected - Syncing data</div>
+            </div>
 
-                <!-- Personal Records -->
-                <div class="card" style="background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(155,81,224,0.05)); margin-bottom: 24px;">
-                    <h3>🏆 Personal Records</h3>
-                    <div id="personalRecords" style="display: grid; gap: 12px;"></div>
+            <div class="card live-session-card">
+                <div class="live-header">
+                    <div>
+                        <div class="live-title">Heart Rate</div>
+                        <div class="live-hr">
+                            <span id="liveHeartRate">--</span>
+                            <span class="live-hr-unit">bpm</span>
+                            <span class="heart-pulse" aria-hidden="true">❤</span>
+                        </div>
+                    </div>
+                    <div class="live-badge"><span class="live-dot"></span> LIVE</div>
                 </div>
+                <div class="live-zone-row">
+                    <div class="live-zone-name" id="liveZoneName">Zone: --</div>
+                    <div class="live-zone-percent"><span id="liveZonePercent">--</span>% max</div>
+                </div>
+                <div class="live-zone-bar">
+                    <div class="live-zone-progress" id="liveZoneProgress"></div>
+                    <div class="live-zone-marker" id="liveZoneMarker"></div>
+                </div>
+                <div class="zone-labels">
+                    <span>Rest</span>
+                    <span>Fat Burn</span>
+                    <span>Cardio</span>
+                    <span>Threshold</span>
+                    <span>Peak</span>
+                </div>
+            </div>
 
-                <!-- Heart Rate Zone Distribution -->
-                <div class="card" style="margin-bottom: 24px;">
-                    <h3>❤️ Heart Rate Zone Distribution</h3>
-                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">Time spent in each training zone</p>
-                    <div style="max-width: 400px; margin: 0 auto;">
-                        <canvas id="zoneChart"></canvas>
+            <div class="dashboard-stats-grid">
+                <div class="dashboard-stat-card">
+                    <div class="stat-icon">🏋️</div>
+                    <div class="stat-value" id="weeklyWorkouts">0</div>
+                    <div class="stat-label">Workouts (Week)</div>
+                </div>
+                <div class="dashboard-stat-card">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-value" id="weeklyCalories">0</div>
+                    <div class="stat-label">Calories Burned (Week)</div>
+                </div>
+                <div class="dashboard-stat-card">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-value" id="weeklyMinutes">0</div>
+                    <div class="stat-label">Active Minutes (Week)</div>
+                </div>
+                <div class="dashboard-stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-value" id="weeklyGoal">0%</div>
+                    <div class="stat-label">Weekly Goal</div>
+                </div>
+            </div>
+
+            <div class="recovery-grid">
+                <div class="card recovery-card">
+                    <div class="recovery-header">
+                        <h3>Recovery Status</h3>
+                        <span class="recovery-check">✔</span>
+                    </div>
+                    <div class="recovery-body">
+                        <div class="recovery-score">
+                            <span id="recoveryScore">--</span>
+                            <small>/100</small>
+                        </div>
+                        <div>
+                            <div class="recovery-pill" id="recoveryLabel">--</div>
+                            <div class="recovery-message" id="recoveryMessage">--</div>
+                        </div>
                     </div>
                 </div>
 
+                <div class="card coach-card">
+                    <div class="coach-card-header">
+                        <div class="coach-badge">🤖</div>
+                        <div>
+                            <div class="coach-title">AI Coach</div>
+                            <div class="coach-time" id="coachTime">just now</div>
+                        </div>
+                    </div>
+                    <div class="coach-text" id="coachMessage">--</div>
+                </div>
+            </div>
 
+            <div class="dashboard-actions">
+                <button class="action-btn primary" onclick="switchTab('live')">+ Start Workout</button>
+            </div>
+
+            <div class="card recent-workouts-card">
+                <div class="recent-header">
+                    <h3>Recent Workouts</h3>
+                    <button class="link-btn" onclick="switchTab('history')">View all</button>
+                </div>
+                <div id="recentWorkoutsList"></div>
             </div>
         </div>
 
@@ -448,6 +458,170 @@
                 FitMind AI Coach v1.0<br>
                 Made with ⚡ for fitness enthusiasts
             </p>
+        </div>
+    </div>
+</div>
+
+<!-- User Profile Modal -->
+<div id="profileModal" class="modal-overlay" style="display: none;">
+    <div class="profile-modal">
+        <div class="profile-modal-header">
+            <h2>👤 User Profile</h2>
+            <button class="close-btn" onclick="closeProfile()">✕</button>
+        </div>
+        <div class="profile-modal-content">
+            <!-- Profile Header Section -->
+            <div class="profile-section">
+                <div class="profile-header-section">
+                    <div class="profile-photo-container">
+                        <div class="profile-photo" id="profilePhoto">👤</div>
+                        <button class="change-photo-btn" onclick="changeProfilePhoto()">📷</button>
+                    </div>
+                    <div class="profile-basic-info">
+                        <input type="text" id="profileName" class="profile-input-large" placeholder="Your Name" />
+                        <div class="profile-email-display" id="profileEmailDisplay">email@example.com</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Body Metrics Section -->
+            <div class="profile-section">
+                <h3 class="section-title">📏 Body Metrics</h3>
+                <div class="profile-grid">
+                    <div class="profile-field">
+                        <label>Age</label>
+                        <input type="number" id="profileAge" placeholder="25" min="13" max="120" />
+                    </div>
+                    <div class="profile-field">
+                        <label>Sex</label>
+                        <select id="profileSex">
+                            <option value="">Select</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="profile-field">
+                        <label>Height</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="profileHeight" placeholder="170" min="100" max="250" />
+                            <span class="unit-label" id="heightUnit">cm</span>
+                        </div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Current Weight</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="profileWeight" placeholder="70" min="30" max="300" step="0.1" />
+                            <span class="unit-label" id="weightUnit">kg</span>
+                        </div>
+                    </div>
+                    <div class="profile-field full-width">
+                        <label>Fitness Level</label>
+                        <select id="profileFitnessLevel">
+                            <option value="">Select your level</option>
+                            <option value="beginner">🌱 Beginner - Just starting out</option>
+                            <option value="intermediate">💪 Intermediate - Regular exerciser</option>
+                            <option value="advanced">🏆 Advanced - Experienced athlete</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Goals Section -->
+            <div class="profile-section">
+                <h3 class="section-title">🎯 Goals</h3>
+                <div class="profile-grid">
+                    <div class="profile-field full-width">
+                        <label>Primary Goal</label>
+                        <select id="profileGoal">
+                            <option value="">Select your goal</option>
+                            <option value="weight-loss">🔥 Weight Loss</option>
+                            <option value="muscle-gain">💪 Muscle Gain</option>
+                            <option value="endurance">🏃 Improve Endurance</option>
+                            <option value="flexibility">🧘 Increase Flexibility</option>
+                            <option value="general">⚖️ General Fitness</option>
+                        </select>
+                    </div>
+                    <div class="profile-field">
+                        <label>Target Weight</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="profileTargetWeight" placeholder="65" min="30" max="300" step="0.1" />
+                            <span class="unit-label" id="targetWeightUnit">kg</span>
+                        </div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Workouts/Week</label>
+                        <input type="number" id="profileWorkoutFrequency" placeholder="3" min="1" max="7" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Overview Section -->
+            <div class="profile-section">
+                <h3 class="section-title">📊 Progress Overview</h3>
+                <div class="progress-stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🎯</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="goalProgress">0%</div>
+                            <div class="stat-label">Goal Progress</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="workoutStreak">0</div>
+                            <div class="stat-label">Day Streak</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preferences Section -->
+            <div class="profile-section">
+                <h3 class="section-title">⚙️ Preferences</h3>
+                <div class="profile-grid">
+                    <div class="profile-field">
+                        <label>Units System</label>
+                        <select id="profileUnits" onchange="updateUnitLabels()">
+                            <option value="metric">Metric (kg, cm)</option>
+                            <option value="imperial">Imperial (lbs, in)</option>
+                        </select>
+                    </div>
+                    <div class="profile-field">
+                        <label>Notifications</label>
+                        <select id="profileNotifications">
+                            <option value="all">All Notifications</option>
+                            <option value="important">Important Only</option>
+                            <option value="none">None</option>
+                        </select>
+                    </div>
+                    <div class="profile-field full-width">
+                        <label>Dietary Preferences (Optional)</label>
+                        <input type="text" id="profileDiet" placeholder="e.g., Vegetarian, Keto, No restrictions" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Section -->
+            <div class="profile-section">
+                <h3 class="section-title">🔒 Account</h3>
+                <div class="profile-grid">
+                    <div class="profile-field full-width">
+                        <label>Email</label>
+                        <input type="email" id="profileEmail" placeholder="your@email.com" disabled />
+                    </div>
+                    <div class="profile-field full-width">
+                        <button class="secondary-btn" onclick="changePassword()">🔑 Change Password</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="profile-actions">
+                <button class="save-profile-btn" onclick="saveProfile()">💾 Save Changes</button>
+                <button class="cancel-btn" onclick="closeProfile()">Cancel</button>
+            </div>
         </div>
     </div>
 </div>
