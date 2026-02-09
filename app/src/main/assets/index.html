@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+        <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -29,16 +29,6 @@
                 <div>
                     <h1>FitMind AI Coach</h1>
                     <p style="font-size: 13px; color: var(--text-muted); margin-top: -4px;">Your Intelligent Training Partner</p>
-                </div>
-            </div>
-            <div class="header-stats">
-                <div class="stat-badge">
-                    <div class="stat-value" id="totalWorkouts">0</div>
-                    <div class="stat-label">Total Workouts</div>
-                </div>
-                <div class="stat-badge">
-                    <div class="stat-value" id="weeklyMinutes">0</div>
-                    <div class="stat-label">This Week</div>
                 </div>
             </div>
             <div id="userInfo" style="margin-left: auto; display: flex; align-items: center; gap: 12px; position: relative;">
@@ -166,27 +156,47 @@
 
         <!-- AI Coach Tab -->
         <div class="tab-content" id="coach-tab">
-            <div class="card">
-                <div id="originalChatControls" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div class="chat-container">
+                <!-- Chat Header (fixed) -->
+                <div class="chat-header">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <button id="sidebarBtn" onclick="event.stopPropagation(); toggleChatSidebar()" style="padding: 8px 12px; font-size: 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); cursor: pointer; border-radius: 8px;" title="View all chats">
+                        <button id="sidebarBtn" onclick="event.stopPropagation(); toggleChatSidebar()" class="chat-header-btn" title="View all chats">
                             ☰
                         </button>
-                        <button id="newChatBtn" onclick="startNewChat()" style="padding: 8px 16px; font-size: 14px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; color: white; font-weight: 600; cursor: pointer; border-radius: 8px;">
+                        <button id="newChatBtn" onclick="startNewChat()" class="chat-header-btn-primary">
                             ✨ New Chat
                         </button>
                     </div>
-                    <h2 style="margin: 0;">🤖 AI Coach</h2>
-                </div>
-                <p style="color: var(--text-secondary); margin-bottom: 24px;">Get personalized training recommendations based on your workout data and goals.</p>
-
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 8px; color: var(--text-secondary);">What would you like to know?</label>
-                    <input type="text" id="coachQuestion" placeholder="E.g., How can I improve my endurance?" style="margin-bottom: 12px;" onkeypress="if(event.key === 'Enter') askCoach()">
-                    <button onclick="askCoach()" style="width: 100%;">Ask AI Coach</button>
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 600;">🤖 AI Coach</h2>
                 </div>
 
-                <div id="coachResponses" style="max-height: 500px; overflow-y: auto;"></div>
+                <!-- Messages Area (scrollable) -->
+                <div id="coachResponses" class="chat-messages"></div>
+
+                <!-- Input Area (fixed bottom) -->
+                <div class="chat-input-area">
+                    <!-- Quick Suggestion Buttons (shown only for new chats) -->
+                    <div id="suggestionButtons" class="suggestion-buttons" style="display: none;">
+                        <button class="suggestion-btn" onclick="useSuggestion('Create a detailed weekly training plan based on my recent workout history and current fitness level')">
+                            📅 Weekly Plan
+                        </button>
+                        <button class="suggestion-btn" onclick="useSuggestion('What are my fitness goals based on my workout patterns? Give me specific recommendations to improve')">
+                            🎯 Goal Advice
+                        </button>
+                        <button class="suggestion-btn" onclick="useSuggestion('Analyze my recovery status and heart rate patterns. Do I need rest days or can I increase intensity?')">
+                            💆 Recovery Tips
+                        </button>
+                        <button class="suggestion-btn" onclick="useSuggestion('How can I improve my performance in my most frequent workout type? What zones should I target?')">
+                            📈 Performance Tips
+                        </button>
+                    </div>
+
+                    <!-- Input Row -->
+                    <div class="chat-input-row">
+                        <input type="text" id="coachQuestion" class="chat-input" placeholder="Ask your coach anything..." onkeypress="if(event.key === 'Enter') askCoach()">
+                        <button onclick="askCoach()" class="chat-send-btn">➤</button>
+                    </div>
+                </div>
             </div>
         </div>
 

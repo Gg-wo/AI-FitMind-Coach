@@ -204,7 +204,13 @@ function createNewChatSession() {
     const newSession = {
         id: 'chat_' + Date.now(),
         title: 'New Chat',
-        messages: [],
+        messages: [
+            {
+                role: 'assistant',
+                content: "Hey! I'm your Fitmind AI fitness coach. I have access to your workout data, heart rate patterns, and recovery status. Ask me anything about your training, or let me analyze your performance!",
+                timestamp: new Date().toISOString()
+            }
+        ],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
@@ -1092,8 +1098,19 @@ function renderChatHistory() {
     const currentSession = getCurrentChatSession();
     
     if (!currentSession || currentSession.messages.length === 0) {
-        coachDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">💬 No conversation yet. Ask me anything about your fitness!</p>';
+        coachDiv.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 14px; text-align: center; padding: 40px 20px;">💬 Start a conversation with your AI coach</div>';
         return;
+    }
+    
+    // Show/hide suggestion buttons based on message count
+    const suggestionButtons = document.getElementById('suggestionButtons');
+    if (suggestionButtons) {
+        // Show suggestions only if there's just the welcome message (1 message)
+        if (currentSession.messages.length === 1 && currentSession.messages[0].role === 'assistant') {
+            suggestionButtons.style.display = 'flex';
+        } else {
+            suggestionButtons.style.display = 'none';
+        }
     }
     
     // Render each message in the current session
@@ -1189,37 +1206,30 @@ function renderChatSidebar() {
 
 // Create user message element
 function createUserMessage(content) {
-    const div = document.createElement('div');
-    div.className = 'user-message';
-    div.style.cssText = 'background: rgba(0, 212, 255, 0.1); border-left: 3px solid var(--accent-primary); padding: 12px 16px; margin-bottom: 12px; border-radius: 8px;';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'user-message';
     
-    const header = document.createElement('div');
-    header.style.cssText = 'font-weight: 600; color: var(--accent-primary); margin-bottom: 6px; font-size: 14px;';
-    header.textContent = '👤 You';
+    const bubble = document.createElement('div');
+    bubble.className = 'user-message-bubble';
+    bubble.textContent = content;
     
-    const contentDiv = document.createElement('div');
-    contentDiv.style.cssText = 'color: var(--text-primary); line-height: 1.6;';
-    contentDiv.textContent = content;
-    
-    div.appendChild(header);
-    div.appendChild(contentDiv);
-    
-    return div;
+    wrapper.appendChild(bubble);
+    return wrapper;
 }
 
 // Create coach message element
 function createCoachMessage(content, isLoading) {
-    const div = document.createElement('div');
-    div.className = 'coach-message' + (isLoading ? ' loading' : '');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'coach-message' + (isLoading ? ' loading' : '');
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'coach-message-bubble';
 
     const header = document.createElement('div');
     header.className = 'coach-header';
     header.innerHTML = `
         <div class="coach-avatar">🤖</div>
-        <div>
-            <strong>AI Coach</strong>
-            <div style="font-size: 12px; color: var(--text-muted);">Powered by Llama 3.1 70B</div>
-        </div>
+        <span>AI Coach</span>
     `;
 
     const contentDiv = document.createElement('div');
@@ -1231,10 +1241,11 @@ function createCoachMessage(content, isLoading) {
         contentDiv.innerHTML = marked.parse(content);
     }
 
-    div.appendChild(header);
-    div.appendChild(contentDiv);
+    bubble.appendChild(header);
+    bubble.appendChild(contentDiv);
+    wrapper.appendChild(bubble);
 
-    return div;
+    return wrapper;
 }
 
 // Render workout history
@@ -1307,17 +1318,10 @@ function renderHistory() {
     historyList.innerHTML = `<div class="history-grid">${historyHTML}</div>`;
 }
 
-// Update header stats
+// Update header stats (deprecated - stats now in Progress tab)
 function updateHeaderStats() {
-    document.getElementById('totalWorkouts').textContent = workoutHistory.length;
-
-    // Calculate this week's minutes
-    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    const weeklyMinutes = workoutHistory
-        .filter(w => new Date(w.startTime).getTime() > oneWeekAgo)
-        .reduce((sum, w) => sum + Math.floor(w.duration / 60), 0);
-
-    document.getElementById('weeklyMinutes').textContent = weeklyMinutes;
+    // No longer needed - header stats removed
+    // Stats are now displayed in the Progress tab
 }
 
 // ============================================================
@@ -1857,6 +1861,15 @@ function renderActivityOverview() {
             }
         }
     });
+}
+
+// Handle suggestion button clicks - Auto-send message
+function useSuggestion(fullQuestion) {
+    const input = document.getElementById('coachQuestion');
+    if (input) {
+        input.value = fullQuestion;
+        askCoach(); // Auto-send the message
+    }
 }
 
 // Custom modal functions
