@@ -81,6 +81,9 @@ function initializeAuth() {
  * Update UI with user information
  */
 function updateUserUI(user) {
+    if (user && user.email) {
+        window.currentUserEmail = user.email;
+    }
     // Update user email display in dropdown if function exists
     if (typeof updateUserEmailDisplay === 'function') {
         updateUserEmailDisplay();
@@ -458,6 +461,53 @@ function setupPreferencesListener() {
 }
 
 // ============================================================
+// ACCOUNT DELETION
+// ============================================================
+
+async function deleteCollection(collectionRef, batchSize = 400) {
+    if (!collectionRef) return;
+
+    let snapshot = await collectionRef.limit(batchSize).get();
+    while (!snapshot.empty) {
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        snapshot = await collectionRef.limit(batchSize).get();
+    }
+}
+
+async function deleteUserData(userId) {
+    const userRef = db.collection('users').doc(userId);
+
+    await Promise.all([
+        deleteCollection(userRef.collection('workouts')),
+        deleteCollection(userRef.collection('chats'))
+    ]);
+
+    await userRef.delete();
+}
+
+async function deleteAccount() {
+    if (!window.auth || !currentUser || !window.db) {
+        throw new Error('User not signed in.');
+    }
+
+    try {
+        if (workoutsUnsubscribe) workoutsUnsubscribe();
+        if (chatsUnsubscribe) chatsUnsubscribe();
+        if (preferencesUnsubscribe) preferencesUnsubscribe();
+
+        await deleteUserData(currentUser.uid);
+        await auth.currentUser.delete();
+
+        console.log('✅ Account deleted');
+    } catch (error) {
+        console.error('❌ Delete account error:', error);
+        throw error;
+    }
+}
+
+// ============================================================
 // SYNC ORCHESTRATION
 // ============================================================
 
@@ -594,5 +644,6 @@ window.firebaseSync = {
     syncFromCloud,
     debouncedSyncToCloud,
     saveUserPreferences,
+    deleteAccount,
     userPreferences
 };

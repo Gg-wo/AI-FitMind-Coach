@@ -69,14 +69,33 @@
                 <h2>🏃 Start Workout</h2>
                 <div class="workout-controls">
                     <div class="workout-type">
-                        <select id="workoutType">
-                            <option value="running">🏃 Running</option>
-                            <option value="cycling">🚴 Cycling</option>
-                            <option value="swimming">🏊 Swimming</option>
-                            <option value="strength">💪 Strength Training</option>
-                            <option value="yoga">🧘 Yoga</option>
-                            <option value="hiit">⚡ HIIT</option>
-                        </select>
+                        <input type="hidden" id="workoutType" value="running" />
+                        <div class="workout-type-cards" role="group" aria-label="Workout type">
+                            <button class="workout-type-card active" type="button" data-type="running" onclick="selectWorkoutType('running')">
+                                <span class="workout-type-emoji">🏃</span>
+                                <span class="workout-type-label">Running</span>
+                            </button>
+                            <button class="workout-type-card" type="button" data-type="cycling" onclick="selectWorkoutType('cycling')">
+                                <span class="workout-type-emoji">🚴</span>
+                                <span class="workout-type-label">Cycling</span>
+                            </button>
+                            <button class="workout-type-card" type="button" data-type="strength" onclick="selectWorkoutType('strength')">
+                                <span class="workout-type-emoji">💪</span>
+                                <span class="workout-type-label">Strength</span>
+                            </button>
+                            <button class="workout-type-card" type="button" data-type="hiit" onclick="selectWorkoutType('hiit')">
+                                <span class="workout-type-emoji">⚡</span>
+                                <span class="workout-type-label">HIIT</span>
+                            </button>
+                            <button class="workout-type-card" type="button" data-type="yoga" onclick="selectWorkoutType('yoga')">
+                                <span class="workout-type-emoji">🧘</span>
+                                <span class="workout-type-label">Yoga</span>
+                            </button>
+                            <button class="workout-type-card" type="button" data-type="swimming" onclick="selectWorkoutType('swimming')">
+                                <span class="workout-type-emoji">🏊</span>
+                                <span class="workout-type-label">Swimming</span>
+                            </button>
+                        </div>
                     </div>
                     <button id="startBtn" onclick="startWorkout()">Start Session</button>
                     <button id="stopBtn" onclick="stopWorkout()" style="display: none;" class="danger">Stop Session</button>
@@ -482,6 +501,35 @@
                         <div class="profile-email-display" id="profileEmailDisplay">email@example.com</div>
                     </div>
                 </div>
+
+                <div id="avatarPicker" class="avatar-picker" style="display: none;">
+                    <div class="avatar-picker-header">
+                        <div class="avatar-picker-title">Choose your avatar</div>
+                        <button class="avatar-close" onclick="closeAvatarPicker()">✕</button>
+                    </div>
+                    <div class="avatar-grid">
+                        <button class="avatar-option" type="button" onclick="selectAvatar('👤')">👤</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('😊')">😊</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('💪')">💪</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🏃')">🏃</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🧘')">🧘</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🚴')">🚴</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🏋️')">🏋️</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('⚡')">⚡</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🔥')">🔥</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🌟')">🌟</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🎯')">🎯</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🦸')">🦸</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🥇')">🥇</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('👨')">👨</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('👩')">👩</button>
+                        <button class="avatar-option" type="button" onclick="selectAvatar('🧑')">🧑</button>
+                    </div>
+                    <div class="avatar-actions">
+                        <button class="secondary-btn" type="button" onclick="closeAvatarPicker()">Cancel</button>
+                        <button class="save-profile-btn" id="confirmAvatarBtn" type="button" onclick="confirmAvatarSelection()" disabled>Confirm</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Body Metrics Section -->
@@ -505,14 +553,14 @@
                         <label>Height</label>
                         <div class="input-with-unit">
                             <input type="number" id="profileHeight" placeholder="170" min="100" max="250" />
-                            <span class="unit-label" id="heightUnit">cm</span>
+                            <span class="unit-label">cm</span>
                         </div>
                     </div>
                     <div class="profile-field">
                         <label>Current Weight</label>
                         <div class="input-with-unit">
                             <input type="number" id="profileWeight" placeholder="70" min="30" max="300" step="0.1" />
-                            <span class="unit-label" id="weightUnit">kg</span>
+                            <span class="unit-label">kg</span>
                         </div>
                     </div>
                     <div class="profile-field full-width">
@@ -523,6 +571,21 @@
                             <option value="intermediate">💪 Intermediate - Regular exerciser</option>
                             <option value="advanced">🏆 Advanced - Experienced athlete</option>
                         </select>
+                        <div class="weekly-target">
+                            <div class="weekly-target-header">
+                                <span>Weekly Workout Target</span>
+                                <span id="profileWorkoutFrequencyValue">3 days</span>
+                            </div>
+                            <input
+                                type="range"
+                                id="profileWorkoutFrequency"
+                                min="1"
+                                max="7"
+                                step="1"
+                                value="3"
+                                oninput="updateWorkoutFrequencyValue(this.value)"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -532,76 +595,28 @@
                 <h3 class="section-title">🎯 Goals</h3>
                 <div class="profile-grid">
                     <div class="profile-field full-width">
-                        <label>Primary Goal</label>
-                        <select id="profileGoal">
-                            <option value="">Select your goal</option>
-                            <option value="weight-loss">🔥 Weight Loss</option>
-                            <option value="muscle-gain">💪 Muscle Gain</option>
-                            <option value="endurance">🏃 Improve Endurance</option>
-                            <option value="flexibility">🧘 Increase Flexibility</option>
-                            <option value="general">⚖️ General Fitness</option>
-                        </select>
+                        <label>Fitness Goals</label>
+                        <div class="goal-chips" id="goalChips">
+                            <button type="button" class="goal-chip" data-goal="weight-loss" onclick="toggleGoalChip('weight-loss')">Lose weight</button>
+                            <button type="button" class="goal-chip" data-goal="muscle-gain" onclick="toggleGoalChip('muscle-gain')">Build muscle</button>
+                            <button type="button" class="goal-chip" data-goal="endurance" onclick="toggleGoalChip('endurance')">Improve endurance</button>
+                            <button type="button" class="goal-chip" data-goal="flexibility" onclick="toggleGoalChip('flexibility')">Increase flexibility</button>
+                            <button type="button" class="goal-chip" data-goal="sleep" onclick="toggleGoalChip('sleep')">Better sleep</button>
+                            <button type="button" class="goal-chip" data-goal="stress" onclick="toggleGoalChip('stress')">Reduce stress</button>
+                            <button type="button" class="goal-chip" data-goal="event" onclick="toggleGoalChip('event')">Train for event</button>
+                        </div>
+                        <div class="goal-hint">Tap multiple goals to personalize your plan.</div>
                     </div>
                     <div class="profile-field">
                         <label>Target Weight</label>
                         <div class="input-with-unit">
                             <input type="number" id="profileTargetWeight" placeholder="65" min="30" max="300" step="0.1" />
-                            <span class="unit-label" id="targetWeightUnit">kg</span>
-                        </div>
-                    </div>
-                    <div class="profile-field">
-                        <label>Workouts/Week</label>
-                        <input type="number" id="profileWorkoutFrequency" placeholder="3" min="1" max="7" />
-                    </div>
-                </div>
-            </div>
-
-            <!-- Progress Overview Section -->
-            <div class="profile-section">
-                <h3 class="section-title">📊 Progress Overview</h3>
-                <div class="progress-stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">🎯</div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="goalProgress">0%</div>
-                            <div class="stat-label">Goal Progress</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🔥</div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="workoutStreak">0</div>
-                            <div class="stat-label">Day Streak</div>
+                            <span class="unit-label">kg</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Preferences Section -->
-            <div class="profile-section">
-                <h3 class="section-title">⚙️ Preferences</h3>
-                <div class="profile-grid">
-                    <div class="profile-field">
-                        <label>Units System</label>
-                        <select id="profileUnits" onchange="updateUnitLabels()">
-                            <option value="metric">Metric (kg, cm)</option>
-                            <option value="imperial">Imperial (lbs, in)</option>
-                        </select>
-                    </div>
-                    <div class="profile-field">
-                        <label>Notifications</label>
-                        <select id="profileNotifications">
-                            <option value="all">All Notifications</option>
-                            <option value="important">Important Only</option>
-                            <option value="none">None</option>
-                        </select>
-                    </div>
-                    <div class="profile-field full-width">
-                        <label>Dietary Preferences (Optional)</label>
-                        <input type="text" id="profileDiet" placeholder="e.g., Vegetarian, Keto, No restrictions" />
-                    </div>
-                </div>
-            </div>
 
             <!-- Account Section -->
             <div class="profile-section">
@@ -613,6 +628,9 @@
                     </div>
                     <div class="profile-field full-width">
                         <button class="secondary-btn" onclick="changePassword()">🔑 Change Password</button>
+                    </div>
+                    <div class="profile-field full-width">
+                        <button class="secondary-btn danger" onclick="deleteAccount()">🗑️ Delete Account</button>
                     </div>
                 </div>
             </div>

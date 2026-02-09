@@ -34,6 +34,8 @@ const STORAGE_KEYS = {
     USER_PROFILE: 'fitmind_user_profile'
 };
 
+let pendingAvatar = null;
+
 // Constants
 const MAX_HR = 190; // Example max heart rate
 const REST_HR = 65;
@@ -677,7 +679,7 @@ async function startWorkout() {
     document.getElementById('startBtn').style.display = 'none';
     document.getElementById('stopBtn').style.display = 'inline-block';
     document.getElementById('liveMetrics').style.display = 'block';
-    document.getElementById('workoutType').disabled = true;
+    setWorkoutTypeDisabled(true);
 
     if (!hrChart) {
         initChart();
@@ -813,7 +815,7 @@ function stopWorkout() {
         // Reset UI
         document.getElementById('startBtn').style.display = 'inline-block';
         document.getElementById('stopBtn').style.display = 'none';
-        document.getElementById('workoutType').disabled = false;
+        setWorkoutTypeDisabled(false);
 
         // Update stats
         updateHeaderStats();
@@ -822,6 +824,34 @@ function stopWorkout() {
         showAlert(`Workout complete! Duration: ${formatDuration(currentWorkout.duration)}, Avg HR: ${currentWorkout.avgHR} bpm (Real data from ${currentWorkout.researchSubject})`);
 
         currentWorkout = null;
+    });
+}
+
+// Workout type cards
+function selectWorkoutType(type) {
+    const input = document.getElementById('workoutType');
+    const cards = document.querySelectorAll('.workout-type-card');
+    if (!input || cards.length === 0) return;
+
+    if (cards[0].disabled) return;
+
+    input.value = type;
+    cards.forEach(card => {
+        card.classList.toggle('active', card.dataset.type === type);
+    });
+}
+
+function setWorkoutTypeDisabled(disabled) {
+    const cards = document.querySelectorAll('.workout-type-card');
+    if (cards.length === 0) return;
+
+    cards.forEach(card => {
+        card.disabled = disabled;
+        if (disabled) {
+            card.classList.add('is-disabled');
+        } else {
+            card.classList.remove('is-disabled');
+        }
     });
 }
 
@@ -1491,7 +1521,12 @@ function renderDashboardGreeting() {
     if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
     if (hour >= 18) greeting = 'Good evening';
 
-    greetingEl.textContent = greeting;
+    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    const profile = profileData ? JSON.parse(profileData) : null;
+    const name = profile?.name ? profile.name.trim() : '';
+    const greetingName = name ? `${greeting}, ${name}` : greeting;
+
+    greetingEl.textContent = greetingName;
     subtextEl.textContent = "Let's crush your goals today";
 }
 
@@ -2300,6 +2335,44 @@ function deleteAllData() {
     });
 }
 
+/**
+ * Delete user account and cloud data
+ */
+function deleteAccount() {
+    const user = window.auth && window.auth.currentUser;
+    if (!user) {
+        showAlert('Please sign in to delete your account.');
+        return;
+    }
+
+    showConfirmDialog('⚠️ This will permanently delete your account and all cloud data. This action cannot be undone. Are you sure?', async () => {
+        try {
+            if (!window.firebaseSync || !window.firebaseSync.deleteAccount) {
+                throw new Error('Cloud delete is unavailable.');
+            }
+
+            await window.firebaseSync.deleteAccount();
+
+            localStorage.clear();
+            workoutHistory = [];
+            chatSessions = [];
+            currentChatId = null;
+
+            showAlert('Account deleted. Redirecting...');
+            setTimeout(() => {
+                window.location.href = 'auth.html';
+            }, 1500);
+        } catch (error) {
+            console.error('❌ Delete account error:', error);
+            if (error && error.code === 'auth/requires-recent-login') {
+                showAlert('Please sign in again to delete your account.');
+            } else {
+                showAlert('Failed to delete account: ' + (error.message || 'Unknown error'));
+            }
+        }
+    });
+}
+
 // ============================================================
 // USER PROFILE MENU
 // ============================================================
@@ -2345,6 +2418,56 @@ function updateUserEmailDisplay() {
         if (settingsBtn) {
             settingsBtn.style.display = 'none';
         }
+    }
+
+    updateProfileAvatarUI();
+}
+
+function updateProfileAvatarUI() {
+    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+    const avatar = profile.photoEmoji || '👤';
+
+    const photoElement = document.getElementById('profilePhoto');
+    if (photoElement) {
+        photoElement.textContent = avatar;
+    }
+
+    const userBtn = document.getElementById('userProfileBtn');
+    if (userBtn) {
+        userBtn.textContent = avatar;
+    }
+}
+
+function setGoalChipsFromProfile(goals) {
+    const selected = Array.isArray(goals) ? goals : goals ? [goals] : [];
+    document.querySelectorAll('.goal-chip').forEach(btn => {
+        const goal = btn.getAttribute('data-goal');
+        btn.classList.toggle('active', selected.includes(goal));
+    });
+}
+
+function getSelectedGoals() {
+    return Array.from(document.querySelectorAll('.goal-chip.active'))
+        .map(btn => btn.getAttribute('data-goal'))
+        .filter(Boolean);
+}
+
+function toggleGoalChip(goal) {
+    const chip = document.querySelector(`.goal-chip[data-goal="${goal}"]`);
+    if (!chip) return;
+    chip.classList.toggle('active');
+}
+
+function updateWorkoutFrequencyValue(value) {
+    const label = document.getElementById('profileWorkoutFrequencyValue');
+    const slider = document.getElementById('profileWorkoutFrequency');
+    if (slider && value !== undefined) {
+        slider.value = value;
+    }
+    if (label) {
+        const days = parseInt(value, 10) || 1;
+        label.textContent = `${days} day${days === 1 ? '' : 's'}`;
     }
 }
 
@@ -2414,7 +2537,7 @@ function getDefaultProfile() {
         height: null,
         weight: null,
         fitnessLevel: '',
-        goal: '',
+        goal: [],
         targetWeight: null,
         workoutFrequency: 3,
         units: 'metric', // metric or imperial
@@ -2498,7 +2621,8 @@ function loadProfile() {
         const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
         
         // Get current user email from Firebase or use profile email
-        const userEmail = window.currentUserEmail || profile.email || 'guest@fitmind.app';
+        const authEmail = window.auth && window.auth.currentUser ? window.auth.currentUser.email : '';
+        const userEmail = authEmail || window.currentUserEmail || profile.email || 'guest@fitmind.app';
         
         // Populate form fields (with null checks)
         const setValueSafe = (id, value) => {
@@ -2516,12 +2640,8 @@ function loadProfile() {
         setValueSafe('profileHeight', profile.height);
         setValueSafe('profileWeight', profile.weight);
         setValueSafe('profileFitnessLevel', profile.fitnessLevel);
-        setValueSafe('profileGoal', profile.goal);
         setValueSafe('profileTargetWeight', profile.targetWeight);
         setValueSafe('profileWorkoutFrequency', profile.workoutFrequency || 3);
-        setValueSafe('profileUnits', profile.units || 'metric');
-        setValueSafe('profileNotifications', profile.notifications || 'all');
-        setValueSafe('profileDiet', profile.diet);
         setValueSafe('profileEmail', userEmail);
         
         const emailDisplay = document.getElementById('profileEmailDisplay');
@@ -2535,8 +2655,12 @@ function loadProfile() {
             photoElement.textContent = profile.photoEmoji || '👤';
         }
         
-        // Update unit labels
-        updateUnitLabels();
+        updateWorkoutFrequencyValue(profile.workoutFrequency || 3);
+
+        // Update goal chips
+        if (document.querySelector('.goal-chip')) {
+            setGoalChipsFromProfile(profile.goal || []);
+        }
         
         console.log('✅ Profile loaded successfully');
     } catch (error) {
@@ -2557,12 +2681,9 @@ function saveProfile() {
         height: parseFloat(document.getElementById('profileHeight').value) || null,
         weight: parseFloat(document.getElementById('profileWeight').value) || null,
         fitnessLevel: document.getElementById('profileFitnessLevel').value,
-        goal: document.getElementById('profileGoal').value,
+        goal: getSelectedGoals(),
         targetWeight: parseFloat(document.getElementById('profileTargetWeight').value) || null,
         workoutFrequency: parseInt(document.getElementById('profileWorkoutFrequency').value) || 3,
-        units: document.getElementById('profileUnits').value,
-        notifications: document.getElementById('profileNotifications').value,
-        diet: document.getElementById('profileDiet').value.trim(),
         photoEmoji: document.getElementById('profilePhoto').textContent,
         updatedAt: new Date().toISOString()
     };
@@ -2578,6 +2699,10 @@ function saveProfile() {
     
     // Save to localStorage
     localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+
+    updateProfileAvatarUI();
+    renderDashboardGreeting();
+    renderDashboardStats();
     
     // Show success message
     showNotification('✅ Profile saved successfully!', 'success');
@@ -2593,41 +2718,49 @@ function saveProfile() {
 /**
  * Update unit labels based on selected system
  */
-function updateUnitLabels() {
-    const units = document.getElementById('profileUnits').value;
-    
-    const heightUnit = document.getElementById('heightUnit');
-    const weightUnit = document.getElementById('weightUnit');
-    const targetWeightUnit = document.getElementById('targetWeightUnit');
-    
-    if (units === 'imperial') {
-        if (heightUnit) heightUnit.textContent = 'in';
-        if (weightUnit) weightUnit.textContent = 'lbs';
-        if (targetWeightUnit) targetWeightUnit.textContent = 'lbs';
-    } else {
-        if (heightUnit) heightUnit.textContent = 'cm';
-        if (weightUnit) weightUnit.textContent = 'kg';
-        if (targetWeightUnit) targetWeightUnit.textContent = 'kg';
-    }
-}
 
 /**
  * Change profile photo (emoji picker)
  */
 function changeProfilePhoto() {
-    const emojis = ['👤', '😊', '💪', '🏃', '🧘', '🚴', '🏋️', '⚡', '🔥', '🌟', '🎯', '🦸', '🥇', '👨', '👩', '🧑'];
-    
-    const choice = prompt('Choose a profile emoji (enter 1-16):\n\n' + 
-        emojis.map((e, i) => `${i + 1}. ${e}`).join('\n'));
-    
-    const index = parseInt(choice) - 1;
-    if (index >= 0 && index < emojis.length) {
-        const photoElement = document.getElementById('profilePhoto');
-        if (photoElement) {
-            photoElement.textContent = emojis[index];
-            showNotification('Photo updated! Don\'t forget to save.', 'info');
-        }
+    const picker = document.getElementById('avatarPicker');
+    if (!picker) return;
+
+    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+    if (picker.style.display === 'block') {
+        pendingAvatar = null;
+        document.querySelectorAll('.avatar-option').forEach(btn => btn.classList.remove('selected'));
+        const confirmBtn = document.getElementById('confirmAvatarBtn');
+        if (confirmBtn) confirmBtn.disabled = true;
     }
+}
+
+function selectAvatar(emoji) {
+    pendingAvatar = emoji;
+    document.querySelectorAll('.avatar-option').forEach(btn => {
+        btn.classList.toggle('selected', btn.textContent === emoji);
+    });
+    const confirmBtn = document.getElementById('confirmAvatarBtn');
+    if (confirmBtn) confirmBtn.disabled = false;
+}
+
+function confirmAvatarSelection() {
+    if (!pendingAvatar) return;
+    const photoElement = document.getElementById('profilePhoto');
+    if (photoElement) {
+        photoElement.textContent = pendingAvatar;
+    }
+    closeAvatarPicker();
+    showNotification('Photo updated! Don\'t forget to save.', 'info');
+}
+
+function closeAvatarPicker() {
+    const picker = document.getElementById('avatarPicker');
+    if (picker) picker.style.display = 'none';
+    pendingAvatar = null;
+    document.querySelectorAll('.avatar-option').forEach(btn => btn.classList.remove('selected'));
+    const confirmBtn = document.getElementById('confirmAvatarBtn');
+    if (confirmBtn) confirmBtn.disabled = true;
 }
 
 /**
@@ -2810,6 +2943,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update user email display in dropdown
         updateUserEmailDisplay();
+        updateProfileAvatarUI();
         
         console.log('✅ App initialized - Data persistence active');
     } catch (error) {
