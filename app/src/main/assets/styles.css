@@ -194,22 +194,54 @@ header {
     border: 2px solid var(--border-color);
     border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     white-space: nowrap;
     font-weight: 500;
     font-size: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.tab::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.tab:hover::before {
+    left: 100%;
 }
 
 .tab:hover {
     border-color: var(--accent-primary);
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
 }
 
 .tab.active {
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background-size: 200% 200%;
     border-color: transparent;
     color: white;
-    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.4),
+                0 4px 12px rgba(255, 107, 53, 0.2);
+    animation: activeTabGlow 2s ease-in-out infinite;
+}
+
+@keyframes activeTabGlow {
+    0%, 100% { 
+        background-position: left center;
+        box-shadow: 0 8px 24px rgba(0, 212, 255, 0.4), 0 4px 12px rgba(255, 107, 53, 0.2);
+    }
+    50% { 
+        background-position: right center;
+        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.5), 0 5px 15px rgba(255, 107, 53, 0.3);
+    }
 }
 
 .tab-content {
@@ -283,29 +315,89 @@ header {
     cursor: pointer;
     border-radius: 8px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.chat-header-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(0, 212, 255, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.chat-header-btn:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .chat-header-btn:hover {
     background: var(--bg-primary);
     border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2),
+                0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chat-header-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 212, 255, 0.2);
 }
 
 .chat-header-btn-primary {
     padding: 8px 16px;
     font-size: 14px;
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background-size: 200% 200%;
     border: none;
     color: white;
     font-weight: 600;
     cursor: pointer;
     border-radius: 8px;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.chat-header-btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.5s ease;
+}
+
+.chat-header-btn-primary:hover::after {
+    transform: translate(-50%, -50%) scale(2);
 }
 
 .chat-header-btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+    transform: translateY(-2px);
+    background-position: right center;
+    box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4),
+                0 3px 8px rgba(255, 107, 53, 0.2),
+                0 0 15px rgba(0, 212, 255, 0.3);
+    animation: pulse 1.5s infinite;
+}
+
+.chat-header-btn-primary:active {
+    transform: translateY(0) scale(0.98);
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4), 0 3px 8px rgba(255, 107, 53, 0.2); }
+    50% { box-shadow: 0 8px 28px rgba(0, 212, 255, 0.6), 0 4px 12px rgba(255, 107, 53, 0.3); }
 }
 
 .chat-messages {
@@ -375,6 +467,7 @@ header {
     height: 48px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background-size: 200% 200%;
     border: none;
     color: white;
     font-size: 24px;
@@ -382,17 +475,45 @@ header {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
+    position: relative;
+    overflow: visible;
+}
+
+.chat-send-btn::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+    filter: blur(8px);
+}
+
+.chat-send-btn:hover::before {
+    opacity: 0.7;
+    animation: rotateBorder 3s linear infinite;
+}
+
+@keyframes rotateBorder {
+    0% { transform: rotate(0deg) scale(1.1); }
+    100% { transform: rotate(360deg) scale(1.1); }
 }
 
 .chat-send-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.4);
+    transform: scale(1.08) rotate(5deg);
+    background-position: right center;
+    box-shadow: 0 6px 24px rgba(0, 212, 255, 0.5),
+                0 3px 12px rgba(255, 107, 53, 0.3),
+                0 0 20px rgba(0, 212, 255, 0.4);
 }
 
 .chat-send-btn:active {
-    transform: scale(0.95);
+    transform: scale(0.92) rotate(-2deg);
+    box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
 }
 
 .card h2 {
@@ -443,41 +564,90 @@ select:focus, input:focus {
 button {
     padding: 14px 32px;
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    background-size: 200% 200%;
     border: none;
     border-radius: 10px;
     color: white;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-family: 'Chakra Petch', sans-serif;
     text-transform: uppercase;
     letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+}
+
+button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+button:hover::before {
+    left: 100%;
 }
 
 button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.4);
+    transform: translateY(-3px);
+    background-position: right center;
+    box-shadow: 0 10px 30px rgba(0, 212, 255, 0.5),
+                0 5px 15px rgba(255, 107, 53, 0.3),
+                0 0 20px rgba(0, 212, 255, 0.3);
+    animation: buttonGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes buttonGlow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.1); }
 }
 
 button:active {
-    transform: translateY(0);
+    transform: translateY(-1px) scale(0.98);
+    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
 }
 
 button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    animation: none;
+}
+
+button:disabled:hover {
+    box-shadow: none;
 }
 
 button.secondary {
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 2px solid var(--border-color);
+    background-size: 100% 100%;
+}
+
+button.secondary:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 8px 20px rgba(0, 212, 255, 0.2),
+                0 0 15px rgba(0, 212, 255, 0.1);
 }
 
 button.danger {
     background: linear-gradient(135deg, #ef4444, #dc2626);
+    background-size: 200% 200%;
+}
+
+button.danger:hover {
+    background-position: right center;
+    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.5),
+                0 5px 15px rgba(220, 38, 38, 0.3),
+                0 0 20px rgba(239, 68, 68, 0.3);
 }
 
 /* Live Metrics */
@@ -494,12 +664,39 @@ button.danger {
     border-radius: 12px;
     text-align: center;
     border: 2px solid var(--border-color);
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(0, 212, 255, 0.05) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.metric-card:hover::before {
+    opacity: 1;
+    animation: rotateGradient 3s linear infinite;
+}
+
+@keyframes rotateGradient {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 .metric-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-6px) scale(1.02);
     border-color: var(--accent-primary);
+    box-shadow: 0 12px 32px rgba(0, 212, 255, 0.3),
+                0 6px 16px rgba(0, 212, 255, 0.15),
+                0 0 20px rgba(0, 212, 255, 0.1);
 }
 
 .metric-value {
@@ -550,17 +747,32 @@ button.danger {
     font-weight: 700;
     font-size: 16px;
     color: rgba(0, 0, 0, 0.8);
-    transition: all 0.4s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     border-radius: 8px;
     position: relative;
     opacity: 0.6;
 }
 
-.zone:hover {
-    filter: brightness(1.2);
-    opacity: 0.8;
+.zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 8px;
 }
+
+.zone:hover::before {
+    opacity: 1;
+}
+
+.zone:hover {
+    filter: brightness(1.3);
+    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);\n}
 
 .zone.active {
     transform: scale(1.1);
@@ -756,12 +968,50 @@ button.danger {
     padding: 20px;
     border-radius: 12px;
     border: 2px solid var(--border-color);
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.history-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 0;
+    background: linear-gradient(180deg, var(--accent-primary), var(--accent-secondary));
+    transition: height 0.4s ease;
+    border-radius: 0 2px 2px 0;
+}
+
+.history-item::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(0, 212, 255, 0.08) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+    border-radius: 50%;
+}
+
+.history-item:hover::before {
+    height: 100%;
+}
+
+.history-item:hover::after {
+    width: 100%;
+    height: 100%;
 }
 
 .history-item:hover {
     border-color: var(--accent-primary);
-    transform: translateX(4px);
+    transform: translateX(8px) scale(1.01);
+    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.25),
+                -4px 0 16px rgba(0, 212, 255, 0.15);
 }
 
 .history-header {
@@ -1124,22 +1374,61 @@ button.danger {
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: left;
     display: flex;
     align-items: center;
     gap: 6px;
+    position: relative;
+    overflow: hidden;
+}
+
+.suggestion-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 3px;
+    height: 0;
+    background: linear-gradient(180deg, var(--accent-primary), var(--accent-secondary));
+    transition: height 0.3s ease;
+    transform: translateY(-50%);
+    border-radius: 0 2px 2px 0;
+}
+
+.suggestion-btn:hover::before {
+    height: 70%;
+}
+
+.suggestion-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(0, 212, 255, 0.1) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+    border-radius: 50%;
+}
+
+.suggestion-btn:hover::after {
+    width: 200%;
+    height: 200%;
 }
 
 .suggestion-btn:hover {
     background: var(--bg-primary);
     border-color: var(--accent-primary);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 212, 255, 0.15);
+    transform: translateX(4px) translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.25),
+                -3px 0 12px rgba(0, 212, 255, 0.15);
 }
 
 .suggestion-btn:active {
-    transform: translateY(0);
+    transform: translateX(2px) translateY(0) scale(0.98);
+    box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
 }
 
 /* Responsive suggestions for mobile */
