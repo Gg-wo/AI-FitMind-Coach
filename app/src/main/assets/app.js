@@ -43,6 +43,27 @@ function getProfileStorageKey() {
     return STORAGE_KEYS.USER_PROFILE;
 }
 
+function getWorkoutHistoryStorageKey() {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        return `${STORAGE_KEYS.WORKOUT_HISTORY}_${window.auth.currentUser.uid}`;
+    }
+    return STORAGE_KEYS.WORKOUT_HISTORY;
+}
+
+function getChatSessionsStorageKey() {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        return `${STORAGE_KEYS.CHAT_SESSIONS}_${window.auth.currentUser.uid}`;
+    }
+    return STORAGE_KEYS.CHAT_SESSIONS;
+}
+
+function getCurrentChatIdStorageKey() {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        return `${STORAGE_KEYS.CURRENT_CHAT_ID}_${window.auth.currentUser.uid}`;
+    }
+    return STORAGE_KEYS.CURRENT_CHAT_ID;
+}
+
 function getLocalProfile() {
     const key = getProfileStorageKey();
     const profileData = localStorage.getItem(key);
@@ -176,7 +197,8 @@ Be concise, data-driven, and motivating.`;
 function saveWorkoutHistory(options = {}) {
     const { suppressSync = false } = options;
     try {
-        localStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(workoutHistory));
+        const key = getWorkoutHistoryStorageKey();
+        localStorage.setItem(key, JSON.stringify(workoutHistory));
         console.log('✓ Saved workout history:', workoutHistory.length, 'workouts');
         
         // Sync to Firebase if available
@@ -194,7 +216,8 @@ function saveWorkoutHistory(options = {}) {
  */
 function loadWorkoutHistory() {
     try {
-        const saved = localStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
+        const key = getWorkoutHistoryStorageKey();
+        const saved = localStorage.getItem(key);
         if (saved) {
             workoutHistory = JSON.parse(saved);
             console.log('✓ Loaded workout history:', workoutHistory.length, 'workouts');
@@ -206,14 +229,39 @@ function loadWorkoutHistory() {
     return false;
 }
 
+function reloadWorkoutHistoryForCurrentUser() {
+    workoutHistory = [];
+    loadWorkoutHistory();
+    updateHeaderStats();
+    renderHistory();
+    renderDashboardStats();
+}
+
+function reloadChatSessionsForCurrentUser() {
+    chatSessions = [];
+    currentChatId = null;
+    loadChatSessions();
+
+    if (chatSessions.length === 0) {
+        createNewChatSession();
+    } else if (!currentChatId) {
+        currentChatId = chatSessions[0].id;
+    }
+
+    renderChatHistory();
+    renderChatSidebar();
+}
+
 /**
  * Save all chat sessions to localStorage and sync to cloud
  */
 function saveChatSessions(options = {}) {
     const { suppressSync = false } = options;
     try {
-        localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(chatSessions));
-        localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, currentChatId || '');
+        const sessionsKey = getChatSessionsStorageKey();
+        const chatIdKey = getCurrentChatIdStorageKey();
+        localStorage.setItem(sessionsKey, JSON.stringify(chatSessions));
+        localStorage.setItem(chatIdKey, currentChatId || '');
         console.log('✓ Saved chat sessions:', chatSessions.length, 'sessions');
         
         // Sync to Firebase if available
@@ -230,8 +278,10 @@ function saveChatSessions(options = {}) {
  */
 function loadChatSessions() {
     try {
-        const saved = localStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
-        const savedChatId = localStorage.getItem(STORAGE_KEYS.CURRENT_CHAT_ID);
+        const sessionsKey = getChatSessionsStorageKey();
+        const chatIdKey = getCurrentChatIdStorageKey();
+        const saved = localStorage.getItem(sessionsKey);
+        const savedChatId = localStorage.getItem(chatIdKey);
         if (saved) {
             chatSessions = JSON.parse(saved);
             currentChatId = savedChatId || null;
@@ -2393,7 +2443,13 @@ function exportData() {
  */
 function deleteAllData() {
     showConfirmDialog('⚠️ This will delete ALL your local workout and chat data. This action cannot be undone. Are you sure?', () => {
-        localStorage.clear();
+        const keysToClear = [
+            getWorkoutHistoryStorageKey(),
+            getChatSessionsStorageKey(),
+            getCurrentChatIdStorageKey(),
+            getProfileStorageKey()
+        ];
+        keysToClear.forEach(key => localStorage.removeItem(key));
         workoutHistory = [];
         chatSessions = [];
         currentChatId = null;

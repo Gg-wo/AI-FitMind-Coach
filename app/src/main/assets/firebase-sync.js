@@ -89,6 +89,14 @@ function updateUserUI(user) {
         updateUserEmailDisplay();
     }
 
+    if (typeof reloadWorkoutHistoryForCurrentUser === 'function') {
+        reloadWorkoutHistoryForCurrentUser();
+    }
+
+    if (typeof reloadChatSessionsForCurrentUser === 'function') {
+        reloadChatSessionsForCurrentUser();
+    }
+
     if (typeof refreshProfileFromCloud === 'function') {
         refreshProfileFromCloud();
     }
