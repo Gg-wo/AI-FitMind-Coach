@@ -371,13 +371,13 @@ header {
 }
 
 .chat-send-btn {
-    width: 48px;
-    height: 48px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
     border: none;
     color: white;
-    font-size: 24px;
+    font-size: 15px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1168,32 +1168,30 @@ button.danger {
 }
 
 .suggestion-btn {
-    flex: 1 1 calc(50% - 4px);
-    min-width: 140px;
-    padding: 10px 14px;
+    flex: 0 1 auto;
+    padding: 8px 14px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    color: var(--text-primary);
+    border-radius: 999px;
+    color: var(--text-secondary);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    text-align: left;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
+    white-space: nowrap;
 }
 
 .suggestion-btn:hover {
-    background: var(--bg-primary);
     border-color: var(--accent-primary);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 212, 255, 0.15);
+    color: var(--text-primary);
 }
 
 .suggestion-btn:active {
-    transform: translateY(0);
+    transform: scale(0.98);
 }
 
 /* Responsive suggestions for mobile */
@@ -1234,9 +1232,9 @@ button.danger {
     }
     
     .chat-send-btn {
-        width: 44px;
-        height: 44px;
-        font-size: 20px;
+        width: 30px;
+        height: 30px;
+        font-size: 15px;
     }
 }
 
