@@ -133,13 +133,14 @@ Be concise, data-driven, and motivating.`;
 /**
  * Save workout history to localStorage and sync to cloud
  */
-function saveWorkoutHistory() {
+function saveWorkoutHistory(options = {}) {
+    const { suppressSync = false } = options;
     try {
         localStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(workoutHistory));
         console.log('✓ Saved workout history:', workoutHistory.length, 'workouts');
         
         // Sync to Firebase if available
-        if (window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
+        if (!suppressSync && window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
             window.firebaseSync.debouncedSyncToCloud();
         }
     } catch (error) {
@@ -168,14 +169,15 @@ function loadWorkoutHistory() {
 /**
  * Save all chat sessions to localStorage and sync to cloud
  */
-function saveChatSessions() {
+function saveChatSessions(options = {}) {
+    const { suppressSync = false } = options;
     try {
         localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(chatSessions));
         localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, currentChatId || '');
         console.log('✓ Saved chat sessions:', chatSessions.length, 'sessions');
         
         // Sync to Firebase if available
-        if (window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
+        if (!suppressSync && window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
             window.firebaseSync.debouncedSyncToCloud();
         }
     } catch (error) {
@@ -224,6 +226,7 @@ function createNewChatSession() {
     saveChatSessions();
     renderChatSidebar();
     renderChatHistory();
+    setChatRenderLock(3000);
     return newSession;
 }
 
@@ -235,6 +238,7 @@ function switchChatSession(chatId) {
     localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, chatId);
     renderChatHistory();
     renderChatSidebar();
+    setChatRenderLock();
 }
 
 /**
@@ -312,7 +316,12 @@ function updateChatTitle(chatId) {
         session.title = firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? '...' : '');
         saveChatSessions();
         renderChatSidebar();
+        setChatRenderLock();
     }
+}
+
+function setChatRenderLock(durationMs = 800) {
+    window.chatRenderLockUntil = Date.now() + durationMs;
 }
 
 /**
@@ -942,9 +951,16 @@ ${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
     currentSession.messages.push(userMessage);
     currentSession.updatedAt = new Date().toISOString();
 
-    // Render chat history with loading
-    renderChatHistory();
+    if (!coachDiv || coachDiv.dataset.chatId !== currentChatId) {
+        renderChatHistory();
+    } else {
+        coachDiv.appendChild(createUserMessage(userMessage.content));
+        coachDiv.scrollTop = coachDiv.scrollHeight;
+        setChatRenderLock();
+    }
+
     const loadingMsg = createCoachMessage('Analyzing...', true);
+    loadingMsg.dataset.loading = 'true';
     coachDiv.appendChild(loadingMsg);
 
     try {
@@ -966,13 +982,18 @@ ${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
         // Save to localStorage
         saveChatSessions();
         
-        // Re-render
-        renderChatHistory();
+        const loadingEl = coachDiv.querySelector('[data-loading="true"]');
+        if (loadingEl) loadingEl.remove();
+        coachDiv.appendChild(createCoachMessage(aiMessage.content, false));
+        coachDiv.scrollTop = coachDiv.scrollHeight;
+        setChatRenderLock();
+
         renderChatSidebar();
     } catch (err) {
-        coachDiv.innerHTML = '';
-        renderChatHistory();
+        const loadingEl = coachDiv.querySelector('[data-loading="true"]');
+        if (loadingEl) loadingEl.remove();
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
+        setChatRenderLock();
     }
 }
 
@@ -1002,12 +1023,17 @@ async function askCoach() {
     currentSession.updatedAt = new Date().toISOString();
 
     const coachDiv = document.getElementById('coachResponses');
-    
-    // Render chat history
-    renderChatHistory();
-    
-    // Add loading indicator
+
+    if (!coachDiv || coachDiv.dataset.chatId !== currentChatId) {
+        renderChatHistory();
+    } else {
+        coachDiv.appendChild(createUserMessage(userMessage.content));
+        coachDiv.scrollTop = coachDiv.scrollHeight;
+        setChatRenderLock();
+    }
+
     const loadingMsg = createCoachMessage('Thinking...', true);
+    loadingMsg.dataset.loading = 'true';
     coachDiv.appendChild(loadingMsg);
 
     // Build context from workout history
@@ -1044,16 +1070,21 @@ Provide a detailed, personalized response with actionable advice.`;
         // Save to localStorage
         saveChatSessions();
         
-        // Re-render
-        renderChatHistory();
+        const loadingEl = coachDiv.querySelector('[data-loading="true"]');
+        if (loadingEl) loadingEl.remove();
+        coachDiv.appendChild(createCoachMessage(aiMessage.content, false));
+        coachDiv.scrollTop = coachDiv.scrollHeight;
+        setChatRenderLock();
+
         renderChatSidebar();
         
         // Clear input
         document.getElementById('coachQuestion').value = '';
     } catch (err) {
-        coachDiv.innerHTML = '';
-        renderChatHistory();
+        const loadingEl = coachDiv.querySelector('[data-loading="true"]');
+        if (loadingEl) loadingEl.remove();
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
+        setChatRenderLock();
     }
 }
 
@@ -1134,6 +1165,8 @@ function renderChatHistory() {
     
     const currentSession = getCurrentChatSession();
     
+    coachDiv.dataset.chatId = currentChatId || '';
+
     if (!currentSession || currentSession.messages.length === 0) {
         coachDiv.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 14px; text-align: center; padding: 40px 20px;">💬 Start a conversation with your AI coach</div>';
         return;

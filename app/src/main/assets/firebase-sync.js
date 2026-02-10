@@ -240,6 +240,9 @@ function setupWorkoutsListener() {
     workoutsUnsubscribe = db.collection('users').doc(currentUser.uid)
         .collection('workouts')
         .onSnapshot((snapshot) => {
+            if (snapshot.metadata.hasPendingWrites) {
+                return;
+            }
             snapshot.docChanges().forEach((change) => {
                 const workout = change.doc.data();
                 delete workout.updatedAt;
@@ -260,7 +263,7 @@ function setupWorkoutsListener() {
             });
             
             // Update UI and localStorage
-            saveWorkoutHistory();
+            saveWorkoutHistory({ suppressSync: true });
             renderHistory();
             updateHeaderStats();
             
@@ -336,6 +339,9 @@ function setupChatsListener() {
     chatsUnsubscribe = db.collection('users').doc(currentUser.uid)
         .collection('chats')
         .onSnapshot((snapshot) => {
+            if (snapshot.metadata.hasPendingWrites) {
+                return;
+            }
             snapshot.docChanges().forEach((change) => {
                 const chat = change.doc.data();
                 delete chat.updatedAt;
@@ -355,9 +361,11 @@ function setupChatsListener() {
             });
             
             // Update UI and localStorage
-            saveChatSessions();
+            saveChatSessions({ suppressSync: true });
             renderChatSidebar();
-            renderChatHistory();
+            if (!(window.chatRenderLockUntil && Date.now() < window.chatRenderLockUntil)) {
+                renderChatHistory();
+            }
             
             console.log('🔄 Chats updated from cloud');
         }, (error) => {
@@ -568,7 +576,7 @@ function mergeWorkouts(cloudWorkouts) {
     workoutHistory = Array.from(mergedMap.values())
         .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
     
-    saveWorkoutHistory();
+    saveWorkoutHistory({ suppressSync: true });
     renderHistory();
     updateHeaderStats();
     
@@ -595,9 +603,11 @@ function mergeChats(cloudChats) {
     chatSessions = Array.from(mergedMap.values())
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     
-    saveChatSessions();
+    saveChatSessions({ suppressSync: true });
     renderChatSidebar();
-    renderChatHistory();
+    if (!(window.chatRenderLockUntil && Date.now() < window.chatRenderLockUntil)) {
+        renderChatHistory();
+    }
     
     console.log('✅ Merged chats:', chatSessions.length, 'total');
 }
