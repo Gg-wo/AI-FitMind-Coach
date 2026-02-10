@@ -196,17 +196,17 @@
                 <div class="chat-input-area">
                     <!-- Quick Suggestion Buttons (shown only for new chats) -->
                     <div id="suggestionButtons" class="suggestion-buttons" style="display: none;">
-                        <button class="suggestion-btn" onclick="useSuggestion('Create a detailed weekly training plan based on my recent workout history and current fitness level')">
+                        <button class="suggestion-btn" onclick="useSuggestion('analyzePerformance')">
+                            📊 Analyze My Performance
+                        </button>
+                        <button class="suggestion-btn" onclick="useSuggestion('Create a detailed weekly training plan based on my current fitness level and goals')">
                             📅 Weekly Plan
                         </button>
-                        <button class="suggestion-btn" onclick="useSuggestion('What are my fitness goals based on my workout patterns? Give me specific recommendations to improve')">
+                        <button class="suggestion-btn" onclick="useSuggestion('What are the best next steps for my fitness goals? Give me specific recommendations')">
                             🎯 Goal Advice
                         </button>
-                        <button class="suggestion-btn" onclick="useSuggestion('Analyze my recovery status and heart rate patterns. Do I need rest days or can I increase intensity?')">
+                        <button class="suggestion-btn" onclick="useSuggestion('Based on my fitness level and goals, how should I balance effort and recovery this week?')">
                             💆 Recovery Tips
-                        </button>
-                        <button class="suggestion-btn" onclick="useSuggestion('How can I improve my performance in my most frequent workout type? What zones should I target?')">
-                            📈 Performance Tips
                         </button>
                     </div>
 
@@ -404,8 +404,8 @@
                 <h3 style="margin-top: 24px;">Data Management</h3>
                 <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px;">
                     <p style="color: var(--text-secondary); margin-bottom: 16px;">
-                        💾 Your workout history and chat conversations are automatically saved to your device using localStorage. 
-                        Data persists across app restarts.
+                        💾 Your workout history, chats, and profile are synced to your account in Firestore.
+                        A per-account local cache keeps the app fast and works offline.
                     </p>
                         <button onclick="showConfirmDialog('Clear all workout history and chat data? This cannot be undone!', () => { clearAllStoredData(); showAlert('All data cleared successfully!'); })" 
                             style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; width: 100%;">
@@ -637,6 +637,7 @@
 
             <!-- Action Buttons -->
             <div class="profile-actions">
+                <button class="secondary-btn danger" onclick="clearUserProfile()" style="margin-bottom: 12px;">🗑️ Clear All Profile Data</button>
                 <button class="save-profile-btn" onclick="saveProfile()">💾 Save Changes</button>
                 <button class="cancel-btn" onclick="closeProfile()">Cancel</button>
             </div>

@@ -304,7 +304,7 @@ function createNewChatSession() {
         messages: [
             {
                 role: 'assistant',
-                content: "Hey! I'm your Fitmind AI fitness coach. I have access to your workout data, heart rate patterns, and recovery status. Ask me anything about your training, or let me analyze your performance!",
+                content: "Hey! I'm your Fitmind AI fitness coach. I have access to your workout history, current workout data, heart rate patterns, and recovery status. Ask me anything about your training, or let me analyze your performance!",
                 timestamp: new Date().toISOString()
             }
         ],
@@ -325,7 +325,7 @@ function createNewChatSession() {
  */
 function switchChatSession(chatId) {
     currentChatId = chatId;
-    localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, chatId);
+    localStorage.setItem(getCurrentChatIdStorageKey(), chatId);
     renderChatHistory();
     renderChatSidebar();
     setChatRenderLock();
@@ -372,6 +372,12 @@ function deleteChatSession(chatId) {
     // Save to localStorage
     console.log('💾 Saving to localStorage...');
     saveChatSessions();
+
+    if (window.firebaseSync && typeof window.firebaseSync.deleteChatFromCloud === 'function') {
+        window.firebaseSync.deleteChatFromCloud(chatId).catch((error) => {
+            console.error('❌ Cloud chat delete failed:', error);
+        });
+    }
     
     // Force re-render everything
     console.log('🎨 Re-rendering sidebar and history...');
@@ -418,12 +424,24 @@ function setChatRenderLock(durationMs = 800) {
  * Clear all stored data (for testing or user request)
  */
 function clearAllStoredData() {
-    localStorage.removeItem(STORAGE_KEYS.WORKOUT_HISTORY);
-    localStorage.removeItem(STORAGE_KEYS.CHAT_SESSIONS);
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_CHAT_ID);
+    localStorage.removeItem(getWorkoutHistoryStorageKey());
+    localStorage.removeItem(getChatSessionsStorageKey());
+    localStorage.removeItem(getCurrentChatIdStorageKey());
     workoutHistory = [];
     chatSessions = [];
     currentChatId = null;
+
+    if (window.firebaseSync && typeof window.firebaseSync.deleteAllChatsFromCloud === 'function') {
+        window.firebaseSync.deleteAllChatsFromCloud().catch((error) => {
+            console.error('❌ Cloud chat clear failed:', error);
+        });
+    }
+
+    if (window.firebaseSync && typeof window.firebaseSync.deleteAllWorkoutsFromCloud === 'function') {
+        window.firebaseSync.deleteAllWorkoutsFromCloud().catch((error) => {
+            console.error('❌ Cloud workout clear failed:', error);
+        });
+    }
     console.log('✓ Cleared Cache');
     updateHeaderStats();
     renderHistory();
@@ -434,9 +452,29 @@ function clearAllStoredData() {
  * Start a new chat session
  */
 function startNewChat() {
+    // First, check if there's already an empty "New Chat" anywhere in the sessions
+    const existingEmptyChat = chatSessions.find(session => {
+        const isEmpty = session.messages.length === 0 || 
+                       (session.messages.length === 1 && session.messages[0].role === 'assistant');
+        const isNewChatTitle = session.title === 'New Chat' || session.title.startsWith('New Chat');
+        return isEmpty && isNewChatTitle;
+    });
+    
+    if (existingEmptyChat) {
+        // Switch to the existing empty chat instead of creating a new one
+        console.log('📝 Switching to existing empty chat:', existingEmptyChat.id);
+        currentChatId = existingEmptyChat.id;
+        localStorage.setItem(getCurrentChatIdStorageKey(), currentChatId);
+        renderChatHistory();
+        renderChatSidebar();
+        document.getElementById('coachQuestion').focus();
+        return;
+    }
+    
     // Check if current chat is empty
     const currentSession = getCurrentChatSession();
-    if (currentSession && currentSession.messages.length === 0) {
+    const isFreshChat = currentSession && currentSession.messages.length === 1 && currentSession.messages[0].role === 'assistant';
+    if (currentSession && (currentSession.messages.length === 0 || isFreshChat)) {
         console.log('⚠️ Cannot create new chat - current chat is empty. Please send at least one message first.');
         showAlert('Please send at least one message in the current chat before starting a new one.');
         document.getElementById('coachQuestion').focus();
@@ -891,9 +929,10 @@ function calculateCaloriesFromHeartRate(avgHR, durationSeconds, age = 28, weight
 
 // Format duration
 function formatDuration(seconds) {
-    const mins = Math.floor(seconds / 60);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
 // Stop workout
@@ -985,6 +1024,7 @@ async function getRealtimeCoaching(workout = null) {
 
     const currentSession = getCurrentChatSession();
     if (!currentSession) return;
+    const sessionId = currentChatId;
 
     const coachDiv = document.getElementById('coachResponses');
 
@@ -1060,21 +1100,24 @@ ${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
         // Save AI response to chat
         const aiMessage = {
             role: 'assistant',
-            content: response,
+            content: response.content,
+            finishReason: response.finishReason,
             timestamp: new Date().toISOString()
         };
-        currentSession.messages.push(aiMessage);
-        currentSession.updatedAt = new Date().toISOString();
+        const activeSession = chatSessions.find(s => s.id === sessionId) || currentSession;
+        if (!activeSession) return;
+        activeSession.messages.push(aiMessage);
+        activeSession.updatedAt = new Date().toISOString();
         
         // Update chat title if first message
-        updateChatTitle(currentChatId);
+        updateChatTitle(activeSession.id);
         
         // Save to localStorage
         saveChatSessions();
         
         const loadingEl = coachDiv.querySelector('[data-loading="true"]');
         if (loadingEl) loadingEl.remove();
-        coachDiv.appendChild(createCoachMessage(aiMessage.content, false));
+        coachDiv.appendChild(createCoachMessage(aiMessage.content, false, aiMessage.finishReason));
         coachDiv.scrollTop = coachDiv.scrollHeight;
         setChatRenderLock();
 
@@ -1083,6 +1126,61 @@ ${targetWorkout.type.toUpperCase()} | ${formatDuration(targetWorkout.duration)}
         const loadingEl = coachDiv.querySelector('[data-loading="true"]');
         if (loadingEl) loadingEl.remove();
         coachDiv.appendChild(createCoachMessage('Error: ' + err.message, false));
+        setChatRenderLock();
+    }
+}
+
+// Continue a truncated AI response
+async function continueResponse() {
+    const currentSession = getCurrentChatSession();
+    if (!currentSession || currentSession.messages.length === 0) return;
+    
+    const sessionId = currentChatId;
+    const lastMessage = currentSession.messages[currentSession.messages.length - 1];
+    
+    // Check if last message is from assistant and was truncated
+    if (lastMessage.role !== 'assistant' || lastMessage.finishReason === 'stop') {
+        showAlert('No incomplete response to continue.');
+        return;
+    }
+    
+    const coachDiv = document.getElementById('coachResponses');
+    
+    // Add loading indicator
+    const loadingMsg = createCoachMessage('Continuing...', true);
+    loadingMsg.dataset.loading = 'true';
+    coachDiv.appendChild(loadingMsg);
+    coachDiv.scrollTop = coachDiv.scrollHeight;
+    
+    try {
+        // Request continuation
+        const continuationPrompt = 'Please continue from where you left off.';
+        const response = await callOpenRouterAPI(continuationPrompt, currentSession.messages);
+        
+        // Append continuation to the last message
+        lastMessage.content += ' ' + response.content;
+        lastMessage.finishReason = response.finishReason;
+        lastMessage.timestamp = new Date().toISOString();
+        
+        const activeSession = chatSessions.find(s => s.id === sessionId) || currentSession;
+        if (!activeSession) return;
+        activeSession.updatedAt = new Date().toISOString();
+        
+        // Save to localStorage
+        saveChatSessions();
+        
+        // Remove loading and re-render the entire chat
+        const loadingEl = coachDiv.querySelector('[data-loading="true"]');
+        if (loadingEl) loadingEl.remove();
+        
+        renderChatHistory();
+        setChatRenderLock();
+        
+        renderChatSidebar();
+    } catch (err) {
+        const loadingEl = coachDiv.querySelector('[data-loading="true"]');
+        if (loadingEl) loadingEl.remove();
+        coachDiv.appendChild(createCoachMessage('Error continuing: ' + err.message, false));
         setChatRenderLock();
     }
 }
@@ -1102,6 +1200,7 @@ async function askCoach() {
 
     const currentSession = getCurrentChatSession();
     if (!currentSession) return;
+    const sessionId = currentChatId;
 
     // Save user message to current chat session
     const userMessage = {
@@ -1126,17 +1225,13 @@ async function askCoach() {
     loadingMsg.dataset.loading = 'true';
     coachDiv.appendChild(loadingMsg);
 
-    // Build context from workout history
-    const recentWorkouts = workoutHistory.slice(0, 5);
-    const historyContext = recentWorkouts.length > 0
-        ? `Recent workout history:\n${recentWorkouts.map(w =>
-            `- ${w.type}: ${formatDuration(w.duration)}, Avg HR: ${w.avgHR} bpm, ${w.calories} kcal`
-          ).join('\n')}`
-        : 'No workout history available.';
+        const profile = getLocalProfile() || getDefaultProfile();
+        const goalList = Array.isArray(profile.goal) && profile.goal.length ? profile.goal.join(', ') : 'Not set';
+        const profileContext = `User profile:\n- Fitness level: ${profile.fitnessLevel || 'Not set'}\n- Goals: ${goalList}\n- Weekly target: ${profile.workoutFrequency || 'Not set'} days\n- Age: ${profile.age || 'Not set'}\n- Sex: ${profile.sex || 'Not set'}`;
 
-    const prompt = `You are an expert AI fitness coach. Answer this question based on the user's workout data:
+    const prompt = `You are an expert AI fitness coach. Answer this question using only the user's profile details. Do not invent workout history or stats.
 
-${historyContext}
+${profileContext}
 
 User's Question: ${question}
 
@@ -1148,21 +1243,24 @@ Provide a detailed, personalized response with actionable advice.`;
         // Save AI response to current chat session
         const aiMessage = {
             role: 'assistant',
-            content: response,
+            content: response.content,
+            finishReason: response.finishReason,
             timestamp: new Date().toISOString()
         };
-        currentSession.messages.push(aiMessage);
-        currentSession.updatedAt = new Date().toISOString();
+        const activeSession = chatSessions.find(s => s.id === sessionId) || currentSession;
+        if (!activeSession) return;
+        activeSession.messages.push(aiMessage);
+        activeSession.updatedAt = new Date().toISOString();
         
         // Update chat title if first message
-        updateChatTitle(currentChatId);
+        updateChatTitle(activeSession.id);
         
         // Save to localStorage
         saveChatSessions();
         
         const loadingEl = coachDiv.querySelector('[data-loading="true"]');
         if (loadingEl) loadingEl.remove();
-        coachDiv.appendChild(createCoachMessage(aiMessage.content, false));
+        coachDiv.appendChild(createCoachMessage(aiMessage.content, false, aiMessage.finishReason));
         coachDiv.scrollTop = coachDiv.scrollHeight;
         setChatRenderLock();
 
@@ -1234,7 +1332,7 @@ ${workoutContext.isRealtime
             model: OPENROUTER_MODEL,
             messages: messages,
             temperature: 0.7,  // Balanced creativity and consistency
-            max_tokens: 250,   // Limit for concise responses (2-4 sentences)
+            max_tokens: 500,   // Increased limit to reduce truncation
             top_p: 0.9         // Slight randomness for natural responses
         })
     });
@@ -1245,7 +1343,10 @@ ${workoutContext.isRealtime
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    return {
+        content: data.choices[0].message.content,
+        finishReason: data.choices[0].finish_reason  // 'stop' = complete, 'length' = truncated
+    };
 }
 
 // Render chat history for current session
@@ -1279,7 +1380,7 @@ function renderChatHistory() {
             const userMsg = createUserMessage(msg.content);
             coachDiv.appendChild(userMsg);
         } else if (msg.role === 'assistant') {
-            const aiMsg = createCoachMessage(msg.content, false);
+            const aiMsg = createCoachMessage(msg.content, false, msg.finishReason || 'stop');
             coachDiv.appendChild(aiMsg);
         }
     });
@@ -1378,7 +1479,7 @@ function createUserMessage(content) {
 }
 
 // Create coach message element
-function createCoachMessage(content, isLoading) {
+function createCoachMessage(content, isLoading, finishReason = 'stop') {
     const wrapper = document.createElement('div');
     wrapper.className = 'coach-message' + (isLoading ? ' loading' : '');
     
@@ -1399,6 +1500,18 @@ function createCoachMessage(content, isLoading) {
         contentDiv.innerHTML = `<div class="loading-dots"><span></span><span></span><span></span></div>`;
     } else {
         contentDiv.innerHTML = marked.parse(content);
+        
+        // Add continue button if response was truncated
+        if (finishReason === 'length') {
+            const continueBtn = document.createElement('button');
+            continueBtn.className = 'continue-btn';
+            continueBtn.innerHTML = '➡️ Continue response';
+            continueBtn.style.cssText = 'margin-top: 12px; padding: 8px 16px; background: var(--accent-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: all 0.2s;';
+            continueBtn.onmouseover = () => continueBtn.style.background = 'var(--accent-secondary)';
+            continueBtn.onmouseout = () => continueBtn.style.background = 'var(--accent-primary)';
+            continueBtn.onclick = () => continueResponse();
+            contentDiv.appendChild(continueBtn);
+        }
     }
 
     bubble.appendChild(header);
@@ -2196,26 +2309,55 @@ function renderActivityOverview() {
 }
 
 // Handle suggestion button clicks
-function useSuggestion(fullQuestion) {
+function useSuggestion(questionOrType) {
     const input = document.getElementById('coachQuestion');
-    if (input) {
-        input.value = fullQuestion;
-        input.focus();
-        // Optionally auto-submit
-        // askCoach();
+    if (!input) return;
+    
+    // Get profile data for context injection
+    const profile = getLocalProfile() || getDefaultProfile();
+    const goalList = Array.isArray(profile.goal) && profile.goal.length ? profile.goal.join(', ') : 'general fitness';
+    const profileSummary = `My Profile: ${profile.fitnessLevel || 'beginner'} level, Age: ${profile.age || '25'}, Sex: ${profile.sex || 'not specified'}, Goals: ${goalList}, Weekly target: ${profile.workoutFrequency || '3'} days`;
+    
+    let finalPrompt = '';
+    
+    // Handle different quick suggestion types with explicit context
+    if (questionOrType === 'analyzePerformance') {
+        if (workoutHistory.length === 0) {
+            finalPrompt = `${profileSummary}\n\nI don't have any workout history yet. Can you give me advice on how to get started with tracking my workouts?`;
+        } else {
+            // Use most recent 3 workouts for analysis
+            const recentWorkouts = workoutHistory.slice(0, 3);
+            const workoutSummary = recentWorkouts.map((w, idx) => {
+                const workoutEmoji = {
+                    'running': '🏃',
+                    'cycling': '🚴',
+                    'strength': '💪',
+                    'hiit': '⚡',
+                    'yoga': '🧘',
+                    'swimming': '🏊'
+                }[w.type] || '🏋️';
+                
+                return `${idx + 1}. ${workoutEmoji} ${w.type.charAt(0).toUpperCase() + w.type.slice(1)} - ${formatDuration(w.duration)} | Avg HR: ${w.avgHR || 'N/A'} bpm | Calories: ${w.calories || 'N/A'} | Date: ${new Date(w.date).toLocaleDateString()}`;
+            }).join('\n');
+            
+            finalPrompt = `${profileSummary}\n\nHere are my ${recentWorkouts.length} most recent workouts:\n${workoutSummary}\n\nAnalyze my performance and provide specific insights on: training consistency, intensity patterns, areas for improvement, and actionable recommendations. Only use the workout data shown above.`;
+        }
+    } else if (questionOrType.includes('weekly training plan')) {
+        finalPrompt = `${profileSummary}\n\nCreate a detailed weekly training plan for me based on this profile information. Include specific workout types, duration, and intensity for each day.`;
+    } else if (questionOrType.includes('best next steps')) {
+        finalPrompt = `${profileSummary}\n\nBased on my profile, what are the best next steps for my fitness goals? Give me specific, actionable recommendations.`;
+    } else if (questionOrType.includes('balance effort and recovery')) {
+        finalPrompt = `${profileSummary}\n\nHow should I balance effort and recovery this week based on my fitness level and goals? Provide specific guidance.`;
+    } else {
+        // Fallback for any other text
+        finalPrompt = questionOrType;
     }
+    
+    input.value = finalPrompt;
+    input.focus();
+    askCoach();
 }
 
-// Handle suggestion button clicks
-function useSuggestion(fullQuestion) {
-    const input = document.getElementById('coachQuestion');
-    if (input) {
-        input.value = fullQuestion;
-        input.focus();
-        // Optionally auto-submit
-        // askCoach();
-    }
-}
 
 // Custom modal functions
 function showAlert(message) {
@@ -2675,6 +2817,42 @@ function getDefaultProfile() {
 }
 
 /**
+ * Clear all user profile data (local + cloud)
+ */
+async function clearUserProfile() {
+    const confirmed = await new Promise(resolve => {
+        showConfirmDialog(
+            'Clear ALL profile data? This will reset your name, avatar, body metrics, fitness level, goals, and target weight. This action cannot be undone!',
+            () => resolve(true),
+            () => resolve(false)
+        );
+    });
+    
+    if (!confirmed) return;
+    
+    try {
+        // Clear from Firestore
+        if (window.firebaseSync && window.firebaseSync.deleteUserProfileFromCloud) {
+            await window.firebaseSync.deleteUserProfileFromCloud();
+        }
+        
+        // Clear from localStorage
+        const key = getProfileStorageKey();
+        localStorage.removeItem(key);
+        
+        // Reset to default profile and update UI
+        const defaultProfile = getDefaultProfile();
+        loadProfileIntoForm(defaultProfile);
+        
+        showAlert('✅ Profile data cleared successfully!');
+        console.log('✅ Profile data cleared from local and cloud');
+    } catch (error) {
+        console.error('❌ Error clearing profile:', error);
+        showAlert('Error clearing profile: ' + error.message);
+    }
+}
+
+/**
  * Open settings/profile modal
  */
 function openSettings() {
@@ -2808,6 +2986,46 @@ async function loadProfile() {
 
 /**
  * Save profile data to localStorage
+ */
+/**
+ * Load profile data into form fields
+ */
+function loadProfileIntoForm(profile) {
+    // Basic fields
+    document.getElementById('profileName').value = profile.name || '';
+    document.getElementById('profileEmail').value = profile.email || '';
+    document.getElementById('profileAge').value = profile.age || '';
+    document.getElementById('profileSex').value = profile.sex || '';
+    document.getElementById('profileHeight').value = profile.height || '';
+    document.getElementById('profileWeight').value = profile.weight || '';
+    document.getElementById('profileFitnessLevel').value = profile.fitnessLevel || '';
+    document.getElementById('profileTargetWeight').value = profile.targetWeight || '';
+    document.getElementById('profileWorkoutFrequency').value = profile.workoutFrequency || 3;
+    
+    // Update frequency label
+    document.getElementById('profileWorkoutFrequencyValue').textContent = (profile.workoutFrequency || 3) + ' days';
+    
+    // Avatar
+    if (profile.photoEmoji) {
+        document.getElementById('profilePhoto').textContent = profile.photoEmoji;
+    }
+    
+    // Goals - clear all first, then set selected ones
+    document.querySelectorAll('.goal-chip').forEach(chip => {
+        chip.classList.remove('selected');
+    });
+    if (Array.isArray(profile.goal) && profile.goal.length > 0) {
+        profile.goal.forEach(goal => {
+            const chip = document.querySelector(`.goal-chip[data-goal="${goal}"]`);
+            if (chip) chip.classList.add('selected');
+        });
+    }
+    
+    console.log('✅ Profile loaded into form');
+}
+
+/**
+ * Save profile from form
  */
 async function saveProfile() {
     const profile = {

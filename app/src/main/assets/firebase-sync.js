@@ -315,6 +315,45 @@ async function syncChatsToCloud() {
     }
 }
 
+async function deleteChatFromCloud(chatId) {
+    if (!syncEnabled || !currentUser || !window.db) return;
+
+    try {
+        await db.collection('users').doc(currentUser.uid)
+            .collection('chats').doc(chatId).delete();
+        console.log('✅ Deleted chat from cloud:', chatId);
+    } catch (error) {
+        console.error('❌ Error deleting chat from cloud:', error);
+        throw error;
+    }
+}
+
+async function deleteAllChatsFromCloud() {
+    if (!syncEnabled || !currentUser || !window.db) return;
+
+    try {
+        const chatsRef = db.collection('users').doc(currentUser.uid).collection('chats');
+        await deleteCollection(chatsRef);
+        console.log('✅ Deleted all chats from cloud');
+    } catch (error) {
+        console.error('❌ Error deleting all chats from cloud:', error);
+        throw error;
+    }
+}
+
+async function deleteAllWorkoutsFromCloud() {
+    if (!syncEnabled || !currentUser || !window.db) return;
+
+    try {
+        const workoutsRef = db.collection('users').doc(currentUser.uid).collection('workouts');
+        await deleteCollection(workoutsRef);
+        console.log('✅ Deleted all workouts from cloud');
+    } catch (error) {
+        console.error('❌ Error deleting all workouts from cloud:', error);
+        throw error;
+    }
+}
+
 /**
  * Load chats from Firestore
  */
@@ -330,7 +369,9 @@ async function loadChatsFromCloud() {
         const cloudChats = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            delete data.updatedAt;
+            if (data.updatedAt && typeof data.updatedAt.toDate === 'function') {
+                data.updatedAt = data.updatedAt.toDate().toISOString();
+            }
             cloudChats.push(data);
         });
         
@@ -356,11 +397,27 @@ function setupChatsListener() {
             }
             snapshot.docChanges().forEach((change) => {
                 const chat = change.doc.data();
-                delete chat.updatedAt;
+                if (chat.updatedAt && typeof chat.updatedAt.toDate === 'function') {
+                    chat.updatedAt = chat.updatedAt.toDate().toISOString();
+                }
                 
                 if (change.type === 'added' || change.type === 'modified') {
                     const localIndex = chatSessions.findIndex(c => c.id === chat.id);
                     if (localIndex >= 0) {
+                        const local = chatSessions[localIndex];
+                        const localCount = Array.isArray(local.messages) ? local.messages.length : 0;
+                        const remoteCount = Array.isArray(chat.messages) ? chat.messages.length : 0;
+                        const localUpdatedAt = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+                        const remoteUpdatedAt = chat.updatedAt ? new Date(chat.updatedAt).getTime() : 0;
+
+                        if (localCount > remoteCount) {
+                            return;
+                        }
+
+                        if (localCount === remoteCount && localUpdatedAt > remoteUpdatedAt) {
+                            return;
+                        }
+
                         chatSessions[localIndex] = chat;
                     } else {
                         chatSessions.push(chat);
@@ -517,6 +574,27 @@ async function saveUserProfile(profile) {
     }
 }
 
+async function deleteUserProfileFromCloud() {
+    if (!syncEnabled || !currentUser || !window.db) {
+        console.log('ℹ️ Guest mode - only clearing local profile');
+        return;
+    }
+
+    try {
+        await db.collection('users').doc(currentUser.uid).set({
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            profile: null,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log('✅ Deleted user profile from cloud');
+    } catch (error) {
+        console.error('❌ Error deleting profile from cloud:', error);
+        throw error;
+    }
+}
+
 // ============================================================
 // ACCOUNT DELETION
 // ============================================================
@@ -645,7 +723,25 @@ function mergeChats(cloudChats) {
     
     // Add/update with cloud chats (cloud wins in conflicts)
     cloudChats.forEach(c => {
-        mergedMap.set(c.id, c);
+        const local = mergedMap.get(c.id);
+        if (!local) {
+            mergedMap.set(c.id, c);
+            return;
+        }
+
+        const localCount = Array.isArray(local.messages) ? local.messages.length : 0;
+        const remoteCount = Array.isArray(c.messages) ? c.messages.length : 0;
+        const localUpdatedAt = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+        const remoteUpdatedAt = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
+
+        if (remoteCount > localCount) {
+            mergedMap.set(c.id, c);
+            return;
+        }
+
+        if (remoteCount === localCount && remoteUpdatedAt > localUpdatedAt) {
+            mergedMap.set(c.id, c);
+        }
     });
     
     // Convert back to array and sort
@@ -705,6 +801,10 @@ window.firebaseSync = {
     saveUserPreferences,
     loadUserProfile,
     saveUserProfile,
+    deleteUserProfileFromCloud,
+    deleteChatFromCloud,
+    deleteAllChatsFromCloud,
+    deleteAllWorkoutsFromCloud,
     deleteAccount,
     userPreferences
 };
