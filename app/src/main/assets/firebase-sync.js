@@ -88,6 +88,10 @@ function updateUserUI(user) {
     if (typeof updateUserEmailDisplay === 'function') {
         updateUserEmailDisplay();
     }
+
+    if (typeof refreshProfileFromCloud === 'function') {
+        refreshProfileFromCloud();
+    }
     
     // You can add more UI updates here if needed
     console.log(`✅ UI updated for user: ${user.email}`);
@@ -469,6 +473,43 @@ function setupPreferencesListener() {
 }
 
 // ============================================================
+// FIRESTORE SYNC - USER PROFILE
+// ============================================================
+
+async function loadUserProfile() {
+    if (!syncEnabled || !currentUser || !window.db) return null;
+
+    try {
+        const doc = await db.collection('users').doc(currentUser.uid).get();
+        if (!doc.exists) return null;
+
+        const data = doc.data();
+        return data.profile || null;
+    } catch (error) {
+        console.error('❌ Error loading profile:', error);
+        return null;
+    }
+}
+
+async function saveUserProfile(profile) {
+    if (!syncEnabled || !currentUser || !window.db) return;
+
+    try {
+        await db.collection('users').doc(currentUser.uid).set({
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            profile: profile,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log('✅ Saved user profile to cloud');
+    } catch (error) {
+        console.error('❌ Error saving profile:', error);
+        throw error;
+    }
+}
+
+// ============================================================
 // ACCOUNT DELETION
 // ============================================================
 
@@ -654,6 +695,8 @@ window.firebaseSync = {
     syncFromCloud,
     debouncedSyncToCloud,
     saveUserPreferences,
+    loadUserProfile,
+    saveUserProfile,
     deleteAccount,
     userPreferences
 };

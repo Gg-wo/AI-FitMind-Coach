@@ -36,6 +36,46 @@ const STORAGE_KEYS = {
 
 let pendingAvatar = null;
 
+function getProfileStorageKey() {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        return `${STORAGE_KEYS.USER_PROFILE}_${window.auth.currentUser.uid}`;
+    }
+    return STORAGE_KEYS.USER_PROFILE;
+}
+
+function getLocalProfile() {
+    const key = getProfileStorageKey();
+    const profileData = localStorage.getItem(key);
+    return profileData ? JSON.parse(profileData) : null;
+}
+
+function setLocalProfile(profile) {
+    const key = getProfileStorageKey();
+    localStorage.setItem(key, JSON.stringify(profile));
+}
+
+async function refreshProfileFromCloud() {
+    if (!window.firebaseSync || typeof window.firebaseSync.loadUserProfile !== 'function') {
+        return;
+    }
+
+    if (!(window.auth && window.auth.currentUser)) {
+        return;
+    }
+
+    try {
+        const cloudProfile = await window.firebaseSync.loadUserProfile();
+        if (cloudProfile) {
+            setLocalProfile(cloudProfile);
+            updateProfileAvatarUI();
+            renderDashboardGreeting();
+            renderDashboardStats();
+        }
+    } catch (error) {
+        console.warn('⚠️ Failed to refresh profile from cloud:', error);
+    }
+}
+
 // Constants
 const MAX_HR = 190; // Example max heart rate
 const REST_HR = 65;
@@ -1554,8 +1594,7 @@ function renderDashboardGreeting() {
     if (hour >= 12 && hour < 18) greeting = 'Good afternoon';
     if (hour >= 18) greeting = 'Good evening';
 
-    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-    const profile = profileData ? JSON.parse(profileData) : null;
+    const profile = getLocalProfile();
     const name = profile?.name ? profile.name.trim() : '';
     const greetingName = name ? `${greeting}, ${name}` : greeting;
 
@@ -1631,8 +1670,7 @@ function renderDashboardStats() {
     const weeklyCalories = Math.round(weekWorkouts.reduce((sum, w) => sum + (w.calories || 0), 0));
     const weeklyMinutes = weekWorkouts.reduce((sum, w) => sum + Math.floor((w.duration || 0) / 60), 0);
 
-    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-    const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+    const profile = getLocalProfile() || getDefaultProfile();
     const target = profile.workoutFrequency || 3;
     const goalPercent = target > 0 ? Math.min(100, Math.round((weeklyWorkouts / target) * 100)) : 0;
 
@@ -2457,8 +2495,7 @@ function updateUserEmailDisplay() {
 }
 
 function updateProfileAvatarUI() {
-    const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-    const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+    const profile = getLocalProfile() || getDefaultProfile();
     const avatar = profile.photoEmoji || '👤';
 
     const photoElement = document.getElementById('profilePhoto');
@@ -2646,12 +2683,23 @@ function closeProfile() {
 /**
  * Load profile data from localStorage
  */
-function loadProfile() {
+async function loadProfile() {
     console.log('📝 Loading profile...');
     
     try {
-        const profileData = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-        const profile = profileData ? JSON.parse(profileData) : getDefaultProfile();
+        let profile = getLocalProfile();
+
+        if (window.auth && window.auth.currentUser && window.firebaseSync && typeof window.firebaseSync.loadUserProfile === 'function') {
+            const cloudProfile = await window.firebaseSync.loadUserProfile();
+            if (cloudProfile) {
+                profile = cloudProfile;
+                setLocalProfile(cloudProfile);
+            }
+        }
+
+        if (!profile) {
+            profile = getDefaultProfile();
+        }
         
         // Get current user email from Firebase or use profile email
         const authEmail = window.auth && window.auth.currentUser ? window.auth.currentUser.email : '';
@@ -2705,7 +2753,7 @@ function loadProfile() {
 /**
  * Save profile data to localStorage
  */
-function saveProfile() {
+async function saveProfile() {
     const profile = {
         name: document.getElementById('profileName').value.trim(),
         email: document.getElementById('profileEmail').value.trim(),
@@ -2722,16 +2770,22 @@ function saveProfile() {
     };
     
     // Preserve createdAt if exists
-    const existingProfile = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    const existingProfile = getLocalProfile();
     if (existingProfile) {
-        const existing = JSON.parse(existingProfile);
-        profile.createdAt = existing.createdAt;
+        profile.createdAt = existingProfile.createdAt;
     } else {
         profile.createdAt = new Date().toISOString();
     }
-    
-    // Save to localStorage
-    localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+
+    setLocalProfile(profile);
+
+    if (window.auth && window.auth.currentUser && window.firebaseSync && typeof window.firebaseSync.saveUserProfile === 'function') {
+        try {
+            await window.firebaseSync.saveUserProfile(profile);
+        } catch (error) {
+            console.warn('⚠️ Failed to save profile to cloud:', error);
+        }
+    }
 
     updateProfileAvatarUI();
     renderDashboardGreeting();
@@ -2977,6 +3031,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update user email display in dropdown
         updateUserEmailDisplay();
         updateProfileAvatarUI();
+        refreshProfileFromCloud();
         
         console.log('✅ App initialized - Data persistence active');
     } catch (error) {
