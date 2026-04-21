@@ -603,6 +603,8 @@ function switchTab(tabName) {
         renderHistory();
     } else if (tabName === 'progress') {
         renderProgressDashboard();
+    } else if (tabName === 'local-llm' && window.localLlmChat && typeof window.localLlmChat.onTabActivated === 'function') {
+        window.localLlmChat.onTabActivated();
     }
 }
 

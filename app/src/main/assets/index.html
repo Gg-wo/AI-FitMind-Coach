@@ -64,6 +64,7 @@
             <div class="tab" data-tab="plan" onclick="switchTab('plan')">📅 Training Plan</div>
             <div class="tab" data-tab="history" onclick="switchTab('history')">📊 History</div>
             <div class="tab" data-tab="coach" onclick="switchTab('coach')">🤖 AI Coach</div>
+            <div class="tab" data-tab="local-llm" onclick="switchTab('local-llm')">🧠 Local LLM</div>
             <div class="tab" data-tab="about" onclick="switchTab('about')">ℹ️ About</div>
         </div>
 
@@ -225,6 +226,35 @@
                     <div class="chat-input-row">
                         <input type="text" id="coachQuestion" class="chat-input" placeholder="Ask your coach anything..." onkeypress="if(event.key === 'Enter') askCoach()">
                         <button onclick="askCoach()" class="chat-send-btn">➤</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Local LLM Chat Tab -->
+        <div class="tab-content" id="local-llm-tab">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 600;">🧠 Local LLM Chat</h2>
+                    <div id="localLlmStatus" style="font-size: 12px; color: var(--text-muted);">Checking model...</div>
+                </div>
+
+                <div id="localLlmMessages" class="chat-messages">
+                    <div class="coach-message">
+                        <div class="coach-message-bubble">
+                            <div class="coach-header">
+                                <div class="coach-avatar">🧠</div>
+                                <span>Local Model</span>
+                            </div>
+                            <div class="coach-content">Ask me anything. I run directly on your device using your local model.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="chat-input-row">
+                        <input type="text" id="localLlmQuestion" class="chat-input" placeholder="Ask local model..." onkeypress="if(event.key === 'Enter') localLlmChat.send()">
+                        <button onclick="localLlmChat.send()" class="chat-send-btn">➤</button>
                     </div>
                 </div>
             </div>
@@ -698,6 +728,7 @@
 <script src="firebase-sync.js"></script>
 <script src="health-connect.js"></script>
 <script src="app.js"></script>
+<script src="local-llm-chat.js"></script>
 <script src="calendar-plan.js"></script>
 </body>
 </html>

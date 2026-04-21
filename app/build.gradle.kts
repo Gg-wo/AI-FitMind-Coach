@@ -13,7 +13,7 @@ android {
     }
     defaultConfig {
         applicationId = "com.example.myapplication"
-        minSdk = 26
+        minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
     implementation(libs.firebase.crashlytics)
+    implementation(project(":aichat-sdk"))
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

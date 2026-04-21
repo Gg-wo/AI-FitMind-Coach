@@ -40,6 +40,8 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.*
+import androidx.activity.viewModels
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private var healthConnectClient: HealthConnectClient? = null
@@ -47,6 +49,9 @@ class MainActivity : ComponentActivity() {
     private val mainScope = MainScope()
 
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
+
+    private val chatViewModel: ChatViewModel by viewModels()
+    private val localModelFileName = "gemma4_final_q4km.gguf"
 
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (fileUploadCallback == null) return@registerForActivityResult
@@ -104,11 +109,25 @@ class MainActivity : ComponentActivity() {
                 WebViewScreen(modifier = Modifier.fillMaxSize())
             }
         }
+
+        // load local model
+        val modelFile = java.io.File(getExternalFilesDir(null), localModelFileName)
+
+        // debug
+        if (modelFile.exists()) {
+            val fileSize = modelFile.length()
+            Log.d("LocalModelCheck", "model found. file size : ${fileSize / (1024 * 1024)} MB")
+            // initialize model
+            chatViewModel.initializeModel(this, modelFile.absolutePath)
+        } else {
+            Log.d("LocalModelCheck", "cannot find the model file in expected path: ${modelFile.absolutePath}")
+        }
     }
 
     fun setupWebView(webView: WebView) {
         this.webView = webView
         webView.addJavascriptInterface(HealthConnectInterface(), "AndroidHealth")
+        webView.addJavascriptInterface(LocalLlmInterface(), "AndroidLocalLLM")
         webView.webChromeClient = WebChromeClient()
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -171,6 +190,54 @@ class MainActivity : ComponentActivity() {
         }
 
     }
+
+    inner class LocalLlmInterface {
+        @JavascriptInterface
+        fun isModelReady(): Boolean = chatViewModel.isReady()
+
+        @JavascriptInterface
+        fun initializeModelIfNeeded() {
+            val modelFile = java.io.File(getExternalFilesDir(null), localModelFileName)
+            if (!modelFile.exists()) {
+                dispatchLocalLlmError("", "Model file not found: ${modelFile.absolutePath}")
+                return
+            }
+            chatViewModel.initializeModelIfNeeded(this@MainActivity, modelFile.absolutePath)
+        }
+
+        @JavascriptInterface
+        fun sendMessage(message: String, callbackId: String) {
+            chatViewModel.sendMessageForWeb(
+                userContent = message,
+                onToken = { token -> dispatchLocalLlmToken(callbackId, token) },
+                onComplete = { full -> dispatchLocalLlmComplete(callbackId, full) },
+                onError = { err -> dispatchLocalLlmError(callbackId, err) }
+            )
+        }
+    }
+
+    private fun dispatchLocalLlmToken(callbackId: String, token: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onToken(${toJsString(callbackId)}, ${toJsString(token)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchLocalLlmComplete(callbackId: String, full: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onComplete(${toJsString(callbackId)}, ${toJsString(full)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchLocalLlmError(callbackId: String, error: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onError(${toJsString(callbackId)}, ${toJsString(error)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun toJsString(value: String): String = JSONObject.quote(value)
 }
 
 @Composable
