@@ -24,7 +24,7 @@ class ChatViewModel : ViewModel() {
     private val isWebGenerating = AtomicBoolean(false)
 
     private val messageHistory = mutableListOf<ChatMessage>(
-        ChatMessage("system", "You are a helpful ai assistant.")
+        ChatMessage("system", "You are a helpful ai fitness coach.")
     )
 
     var inputText by mutableStateOf("")
