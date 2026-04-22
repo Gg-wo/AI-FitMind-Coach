@@ -1,4 +1,4 @@
-        <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,6 +13,8 @@
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.0/dist/pose-detection.min.js"></script>
 
     <!-- Local Styles -->
     <link rel="stylesheet" href="styles.css">
@@ -58,8 +60,11 @@
         <div class="tabs">
             <div class="tab active" data-tab="progress" onclick="switchTab('progress')">📊 Dashboard</div>
             <div class="tab" data-tab="live" onclick="switchTab('live')">🏃 Workout</div>
+            <div class="tab" data-tab="pose" onclick="switchTab('pose')">🏋️ Pose Coach</div>
+            <div class="tab" data-tab="plan" onclick="switchTab('plan')">📅 Training Plan</div>
             <div class="tab" data-tab="history" onclick="switchTab('history')">📊 History</div>
             <div class="tab" data-tab="coach" onclick="switchTab('coach')">🤖 AI Coach</div>
+            <div class="tab" data-tab="local-llm" onclick="switchTab('local-llm')">🧠 Local LLM</div>
             <div class="tab" data-tab="about" onclick="switchTab('about')">ℹ️ About</div>
         </div>
 
@@ -96,6 +101,13 @@
                                 <span class="workout-type-label">Swimming</span>
                             </button>
                         </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <span>❤️ Use Real Heart Rate (Health Connect)</span>
+                            <input type="checkbox" id="useRealHrToggle" onchange="toggleHrSource()">
+                        </label>
+                        <span id="hrSourceStatus" style="font-size: 12px; color: var(--text-muted);">(Simulated data)</span>
                     </div>
                     <button id="startBtn" onclick="startWorkout()">Start Session</button>
                     <button id="stopBtn" onclick="stopWorkout()" style="display: none;" class="danger">Stop Session</button>
@@ -219,6 +231,35 @@
             </div>
         </div>
 
+        <!-- Local LLM Chat Tab -->
+        <div class="tab-content" id="local-llm-tab">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 600;">🧠 Local LLM Chat</h2>
+                    <div id="localLlmStatus" style="font-size: 12px; color: var(--text-muted);">Checking model...</div>
+                </div>
+
+                <div id="localLlmMessages" class="chat-messages">
+                    <div class="coach-message">
+                        <div class="coach-message-bubble">
+                            <div class="coach-header">
+                                <div class="coach-avatar">🧠</div>
+                                <span>Local Model</span>
+                            </div>
+                            <div class="coach-content">Ask me anything. I run directly on your device using your local model.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="chat-input-row">
+                        <input type="text" id="localLlmQuestion" class="chat-input" placeholder="Ask local model..." onkeypress="if(event.key === 'Enter') localLlmChat.send()">
+                        <button onclick="localLlmChat.send()" class="chat-send-btn">➤</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Dashboard Tab -->
         <div class="tab-content active" id="progress-tab">
             <div class="dashboard-hero">
@@ -324,6 +365,37 @@
             </div>
         </div>
 
+        <!-- Pose Coach Tab -->
+        <div class="tab-content" id="pose-tab">
+            <div class="card">
+                <h2>🏋️ AI Pose Coach</h2>
+                <p>Upload a video of your exercise. AI will analyze your form and provide feedback.</p>
+                <div style="display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
+                    <select id="exerciseSelect">
+                        <option value="barbell_bench_press">🏋️ Barbell Bench Press</option>
+                        <option value="squat">🏋️ Squat</option>
+                        <option value="deadlift">🏋️ Deadlift</option>
+                    </select>
+                    <input type="file" id="videoUpload" accept="video/*">
+                    <button id="analyzeVideoBtn" >🔍 Analyze with AI</button>
+                </div>
+                <video id="poseVideo" controls style="width:100%; max-width:640px; border-radius:12px; background:#000; display:none;"></video>
+                <div id="poseFeedback" style="margin-top:16px; padding:12px; background:var(--bg-tertiary); border-radius:12px;"></div>
+            </div>
+        </div>
+
+        <!-- Training Plan Tab -->
+        <div class="tab-content" id="plan-tab">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>📅 Training Calendar</h2>
+                    <button id="aiGenerateWeekPlanBtn" class="secondary">🤖 AI Generate Week Plan</button>
+                </div>
+                <div id="calendarContainer" style="min-height: 400px;"></div>
+                <div id="planDetailContainer" style="display: none;"></div>
+            </div>
+        </div>
+
         <!-- History Tab -->
         <div class="tab-content" id="history-tab">
             <div class="card">
@@ -407,9 +479,9 @@
                         💾 Your workout history, chats, and profile are synced to your account in Firestore.
                         A per-account local cache keeps the app fast and works offline.
                     </p>
-                        <button onclick="showConfirmDialog('Clear all workout history and chat data? This cannot be undone!', () => { clearAllStoredData(); showAlert('All data cleared successfully!'); })" 
+                    <button onclick="showConfirmDialog('Clear all workout history and chat data? This cannot be undone!', () => { clearAllStoredData(); showAlert('All data cleared successfully!'); })"
                             style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; width: 100%;">
-                         Clear Cache 🗑️
+                        Clear Cache 🗑️
                     </button>
                     <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px; text-align: center;">
                         Use this to reset the app or free up storage space
@@ -447,7 +519,7 @@
             </div>
             <button id="authButton" onclick="handleAuthAction()" class="settings-button">Sign In</button>
         </div>
-        
+
         <div class="settings-section">
             <h4>Preferences</h4>
             <div class="settings-item">
@@ -465,13 +537,13 @@
                 </label>
             </div>
         </div>
-        
+
         <div class="settings-section">
             <h4>Data Management</h4>
             <button onclick="exportData()" class="settings-button secondary">📥 Export All Data</button>
             <button onclick="deleteAllData()" class="settings-button danger">🗑️ Delete All Local Data</button>
         </div>
-        
+
         <div class="settings-section">
             <p style="font-size: 12px; color: var(--text-muted); text-align: center; margin: 0;">
                 FitMind AI Coach v1.0<br>
@@ -577,13 +649,13 @@
                                 <span id="profileWorkoutFrequencyValue">3 days</span>
                             </div>
                             <input
-                                type="range"
-                                id="profileWorkoutFrequency"
-                                min="1"
-                                max="7"
-                                step="1"
-                                value="3"
-                                oninput="updateWorkoutFrequencyValue(this.value)"
+                                    type="range"
+                                    id="profileWorkoutFrequency"
+                                    min="1"
+                                    max="7"
+                                    step="1"
+                                    value="3"
+                                    oninput="updateWorkoutFrequencyValue(this.value)"
                             />
                         </div>
                     </div>
@@ -654,6 +726,9 @@
 <script src="config.js"></script>
 <script src="firebase-config.js"></script>
 <script src="firebase-sync.js"></script>
+<script src="health-connect.js"></script>
 <script src="app.js"></script>
+<script src="local-llm-chat.js"></script>
+<script src="calendar-plan.js"></script>
 </body>
 </html>

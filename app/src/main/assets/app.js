@@ -603,6 +603,8 @@ function switchTab(tabName) {
         renderHistory();
     } else if (tabName === 'progress') {
         renderProgressDashboard();
+    } else if (tabName === 'local-llm' && window.localLlmChat && typeof window.localLlmChat.onTabActivated === 'function') {
+        window.localLlmChat.onTabActivated();
     }
 }
 
@@ -824,6 +826,21 @@ async function startWorkout() {
 
     // Start updating metrics
     workoutInterval = setInterval(updateWorkoutMetrics, 1000);
+    // base on the button to choose which data
+        const useRealHr = document.getElementById('useRealHrToggle').checked;
+        if (useRealHr && HealthConnectManager.checkAvailability()) {
+            // use real data
+            HealthConnectManager.setUseRealData(true, (hr) => {
+                if (workoutActive) updateMetricsWithRealHR(hr);
+            });
+
+            if (workoutInterval) clearInterval(workoutInterval);
+            workoutInterval = null;
+        } else {
+            // use research data
+            if (workoutInterval) clearInterval(workoutInterval);
+            workoutInterval = setInterval(updateWorkoutMetrics, 1000);
+        }
 }
 
 // Update workout metrics
@@ -938,6 +955,7 @@ function formatDuration(seconds) {
 // Stop workout
 function stopWorkout() {
     if (!workoutActive) return;
+    HealthConnectManager.stopRealTimeMonitoring();
 
     showConfirmDialog('End this workout session?', () => {
         workoutActive = false;
@@ -1332,7 +1350,7 @@ ${workoutContext.isRealtime
             model: OPENROUTER_MODEL,
             messages: messages,
             temperature: 0.7,  // Balanced creativity and consistency
-            max_tokens: 500,   // Increased limit to reduce truncation
+            max_tokens: 3000,   // Increased limit to reduce truncation
             top_p: 0.9         // Slight randomness for natural responses
         })
     });
@@ -3306,6 +3324,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUserEmailDisplay();
         updateProfileAvatarUI();
         refreshProfileFromCloud();
+        initPoseCoach();
+        initTrainingPlanModule();
         
         console.log('✅ App initialized - Data persistence active');
     } catch (error) {
@@ -3320,3 +3340,348 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 });
+
+// for real data
+function updateMetricsWithRealHR(currentHR) {
+    if (!workoutActive) return;
+
+    const elapsed = Math.floor((Date.now() - workoutStartTime) / 1000);
+
+
+    document.getElementById('currentHR').textContent = currentHR;
+    document.getElementById('duration').textContent = formatDuration(elapsed);
+
+    // record heart rate
+    hrData.push(currentHR);
+    const avgHR = Math.round(hrData.reduce((a, b) => a + b, 0) / hrData.length);
+    document.getElementById('avgHR').textContent = avgHR;
+
+    // calculate calories
+    const calories = calculateCaloriesFromHeartRate(avgHR, elapsed);
+    document.getElementById('calories').textContent = calories;
+
+    // update zones
+    updateZones(currentHR);
+
+    // update Dashboard
+    if (typeof renderDashboardLive === 'function') {
+        renderDashboardLive();
+    }
+
+    // update Chart
+    if (hrChart) {
+        const timeLabel = formatDuration(elapsed);
+        hrChart.data.labels.push(timeLabel);
+        hrChart.data.datasets[0].data.push(currentHR);
+        hrChart.update('none');
+    }
+
+    // update workout
+    if (currentWorkout) {
+        currentWorkout.hrData = [...hrData];
+        currentWorkout.avgHR = avgHR;
+        currentWorkout.maxHR = Math.max(...hrData);
+        currentWorkout.duration = elapsed;
+        currentWorkout.calories = calories;
+    }
+}
+
+function toggleHrSource() {
+    const toggle = document.getElementById('useRealHrToggle');
+    const statusSpan = document.getElementById('hrSourceStatus');
+    if (toggle.checked) {
+        if (HealthConnectManager.checkAvailability()) {
+            // if doing workout and need to switch
+            if (workoutActive) {
+                // stop research data
+                if (workoutInterval) {
+                    clearInterval(workoutInterval);
+                    workoutInterval = null;
+                }
+                // start real data
+                HealthConnectManager.setUseRealData(true, (hr) => {
+                    if (workoutActive) updateMetricsWithRealHR(hr);
+                });
+            }
+            statusSpan.textContent = '(Real data from Health Connect)';
+            showAlert('Using real heart rate from Health Connect');
+        } else {
+            toggle.checked = false;
+            showAlert('Health Connect is not available on this device');
+            statusSpan.textContent = '(Simulated data)';
+        }
+    } else {
+        HealthConnectManager.setUseRealData(false);
+        if (workoutActive) {
+            // back to research data
+            if (workoutInterval) clearInterval(workoutInterval);
+            workoutInterval = setInterval(updateWorkoutMetrics, 1000);
+        }
+        statusSpan.textContent = '(Simulated data)';
+        showAlert('Using simulated heart rate data');
+    }
+}
+
+
+// ============================================================
+// POSE COACH MODULE - MoveNet + AI Analysis
+// ============================================================
+let poseDetector = null;
+let currentExercise = 'dumbbell_bench_press';
+
+// ---------- Load the model (fix the backend initialization)----------
+async function loadPoseModel() {
+    const feedbackDiv = document.getElementById('poseFeedback');
+    if (poseDetector) return poseDetector;
+
+    feedbackDiv.innerHTML = '⏳ Load TensorFlow.js...';
+
+    // Load the core library of TensorFlow.js
+    if (typeof tf === 'undefined') {
+        await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('TensorFlow.js loading failed'));
+            document.head.appendChild(script);
+        });
+    }
+
+    // Wait for tf to initialize and set the backend
+    feedbackDiv.innerHTML = '⏳ Initialize the TF backend...';
+    await tf.ready();
+    // First try WebGL; if it fails, then use the CPU
+    try {
+        await tf.setBackend('webgl');
+        console.log('✅ Using the WebGL backend');
+    } catch (e) {
+        console.warn('WebGL is unavailable. Switching to CPU.');
+        await tf.setBackend('cpu');
+    }
+
+    // Load the Pose Detection library
+    if (typeof poseDetection === 'undefined') {
+        await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.0/dist/pose-detection.min.js';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('Pose Detection library loading fail'));
+            document.head.appendChild(script);
+        });
+    }
+
+    feedbackDiv.innerHTML = '📦 Initialize MoveNet...';
+    const model = poseDetection.SupportedModels.MoveNet;
+    const detector = await poseDetection.createDetector(model, {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        enableSmoothing: true
+    });
+
+    poseDetector = detector;
+    feedbackDiv.innerHTML = '✅ Model is ready and can be used for analyzing videos';
+    return detector;
+}
+
+// ---------- 2. Angle Calculation ----------
+function calculateAngle(a, b, c) {
+    const ab = { x: a.x - b.x, y: a.y - b.y };
+    const cb = { x: c.x - b.x, y: c.y - b.y };
+    const dot = ab.x * cb.x + ab.y * cb.y;
+    const magAB = Math.hypot(ab.x, ab.y);
+    const magCB = Math.hypot(cb.x, cb.y);
+    const rad = Math.acos(Math.min(1, Math.max(-1, dot / (magAB * magCB))));
+    return rad * 180 / Math.PI;
+}
+
+// ---------- 3.Extracting from the perspective of key points (MoveNet 17 points)----------
+function extractAngles(keypoints) {
+    const angles = {};
+    const ex = currentExercise;
+    // MoveNet Index: 5 Left Shoulder, 6 Right Shoulder, 7 Left Elbow, 8 Right Elbow, 9 Left Wrist, 10 Right Wrist, 11 Left Hip, 12 Right Hip, 13 Left Knee, 14 Right Knee, 15 Left Ankle, 16 Right Ankle
+
+    if (ex.includes('bench_press')) {
+        //Elbow angle (shoulder - elbow - wrist)
+        if (keypoints[5] && keypoints[7] && keypoints[9]) angles.leftElbow = calculateAngle(keypoints[5], keypoints[7], keypoints[9]);
+        if (keypoints[6] && keypoints[8] && keypoints[10]) angles.rightElbow = calculateAngle(keypoints[6], keypoints[8], keypoints[10]);
+        // Shoulder abduction angle (hip - shoulder - elbow), used to check if the elbow is overly extended (Shoulder Flare)
+        if (keypoints[11] && keypoints[5] && keypoints[7]) angles.leftShoulder = calculateAngle(keypoints[11], keypoints[5], keypoints[7]);
+        if (keypoints[12] && keypoints[6] && keypoints[8]) angles.rightShoulder = calculateAngle(keypoints[12], keypoints[6], keypoints[8]);
+    }
+    else if (ex === 'squat' || ex === 'deadlift') {
+        // Hip joint angle / Spine angle (shoulder - hip - knee)
+        if (keypoints[5] && keypoints[11] && keypoints[13]) angles.leftHip = calculateAngle(keypoints[5], keypoints[11], keypoints[13]);
+        if (keypoints[6] && keypoints[12] && keypoints[14]) angles.rightHip = calculateAngle(keypoints[6], keypoints[12], keypoints[14]);
+        // Knee joint angle (hip-knee-ankle)
+        if (keypoints[11] && keypoints[13] && keypoints[15]) angles.leftKnee = calculateAngle(keypoints[11], keypoints[13], keypoints[15]);
+        if (keypoints[12] && keypoints[14] && keypoints[16]) angles.rightKnee = calculateAngle(keypoints[12], keypoints[14], keypoints[16]);
+    }
+    return angles;
+}
+
+// ---------- 4. Analysis video ----------
+async function analyzeUploadedVideo() {
+    const fileInput = document.getElementById('videoUpload');
+    const video = document.getElementById('poseVideo');
+    const feedbackDiv = document.getElementById('poseFeedback');
+    if (!fileInput.files.length) {
+        showNotification('Please select the video file', 'info');
+        return;
+    }
+    try {
+        await loadPoseModel();
+    } catch (err) {
+        feedbackDiv.innerHTML = `❌ Model loading failed: ${err.message}`;
+        return;
+    }
+    const file = fileInput.files[0];
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.style.display = 'block';
+    video.load();
+    feedbackDiv.innerHTML = '📹 uploading video...';
+    await new Promise(resolve => { video.onloadedmetadata = resolve; });
+    const duration = video.duration;
+
+    const interval = 0.5; // second
+    let numSamples = Math.floor(duration / interval) + 1;
+    numSamples = Math.min(numSamples, 30); // max 30 frame
+    const sampleTimes = [];
+    for (let i = 0; i < numSamples; i++) {
+        sampleTimes.push(i * interval);
+    }
+    // make sure last frame wont over the length of video
+    if (sampleTimes[sampleTimes.length - 1] > duration) {
+        sampleTimes[sampleTimes.length - 1] = duration;
+    }
+    let allAngles = [];
+    let frameDetails = [];
+    feedbackDiv.innerHTML = `🔍 analyzing ${numSamples} frame...`;
+    for (let idx = 0; idx < sampleTimes.length; idx++) {
+        const t = sampleTimes[idx];
+        video.currentTime = t;
+        await new Promise(resolve => { video.onseeked = resolve; });
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+            const poses = await poseDetector.estimatePoses(canvas);
+            if (poses && poses.length > 0 && poses[0].keypoints) {
+                const angles = extractAngles(poses[0].keypoints);
+                allAngles.push(angles);
+                frameDetails.push(`At ${t.toFixed(1)}s: ${JSON.stringify(angles)}`);
+            } else {
+                frameDetails.push(`At ${t.toFixed(1)}s: Cannot detect body`);
+            }
+        } catch (err) {
+            console.warn(`Frame ${idx} error:`, err);
+            frameDetails.push(`At ${t.toFixed(1)}s: detection error`);
+        }
+        feedbackDiv.innerHTML = `🔍 analyzing (${idx+1}/${numSamples})...`;
+    }
+    if (allAngles.length === 0) {
+        feedbackDiv.innerHTML = '❌ Cannot detect body';
+        return;
+    }
+    /*const avgAngles = {};
+    for (let key of Object.keys(allAngles[0])) {
+        avgAngles[key] = allAngles.reduce((s,a) => s + a[key], 0) / allAngles.length;
+    }*/
+    const extremeAngles = {};
+    for (let key of Object.keys(allAngles[0])) {
+        const values = allAngles.map(a => a[key]).filter(v => !isNaN(v));
+        if (values.length > 0) {
+            extremeAngles[key] = {
+                min: Math.round(Math.min(...values)),
+                max: Math.round(Math.max(...values))
+            };
+        }
+    }
+    feedbackDiv.innerHTML = '🤖 requesting AI analysis...';
+    const aiResponse = await callPoseAI(currentExercise, extremeAngles, frameDetails);
+    feedbackDiv.innerHTML = `
+            <strong>🤖 AI coach analysis:</strong><br>
+            ${marked.parse(aiResponse)}
+            <br>
+            <details>
+                <summary>📋 Frame-by-frame details</summary>
+                <div style="max-height:300px; overflow-y:auto;">${frameDetails.join('<br>')}</div>
+            </details>
+        `;
+}
+
+async function callPoseAI(exercise, extremeAngles, frameDetails) {
+    const step = Math.max(1, Math.floor(frameDetails.length / 5));
+    const summarizedFrames = frameDetails.filter((_, i) => i % step === 0).slice(0, 5).join('\n');
+
+    let specificGuidance = '';
+    if (exercise === 'deadlift') {
+        specificGuidance = `
+Key focus for deadlift:
+- Hip Angle: Should start closed (~60-90°) and open fully at the top (~170-180°).
+- Knee Angle: Should start bent (~90-110°) and extend simultaneously with the hips. If knees lock out (180°) while hips are still bent, it indicates poor form ("stiff-leg" or lifting with the lower back).
+- Synchronization: Hips and knees should reach their max angles at roughly the same time.`;
+    } else if (exercise === 'squat') {
+        specificGuidance = `
+Key focus for squat:
+- Knee depth (min angle): Target is ~70-90° at the bottom (below parallel). >100° is a half-squat.
+- Hip angle (min angle): Should drop correspondingly. If hip angle is very low but knee angle is high, they are leaning forward too much ("good morning" squat).
+- Extension: Both knees and hips should return to near 180° at the top.`;
+    } else if (exercise.includes('bench_press')) {
+        specificGuidance = `
+Key focus for bench press:
+- Elbow angle: Bottom of the movement should be ~90° or less. Top should be near 180° (lockout).
+- Shoulder flare (Shoulder angle): Should ideally be 45-75° at the bottom. An angle >85° means elbows are flared out too wide, putting the rotator cuff at extreme risk.`;
+    }
+
+    const prompt = `You are an elite biomechanics expert analyzing a ${exercise.replace(/_/g, ' ')}.
+Analyze this trajectory data:
+
+[MOVEMENT EXTREMES (Min/Max degrees)]
+${JSON.stringify(extremeAngles, null, 2)}
+
+[SAMPLE TRAJECTORY (5 key frames)]
+${summarizedFrames}
+
+[BIOMECHANICAL STANDARDS]
+${specificGuidance}
+
+[TASK]
+1. Identify specific flaws based on the numbers. Quote actual angle values from the data.
+2. Give actionable cues (2 bullet points) to fix the most important issue.
+3. If the data suggests injury risk (e.g., flared elbows, stiff-leg deadlift), include a safety warning.
+4. If data is insufficient or noisy, state that clearly.
+
+[OUTPUT FORMAT (Strictly Markdown)]
+**🔍 Form Analysis:** (What the data says about their lift)
+**🛠️ Actionable Cues:** (2 bullet points to fix the issue)
+**⚠️ Safety Warning:** (Include ONLY if the data suggests injury risk, like flared elbows in bench press or stiff-leg deadlifts)`;
+
+    try {
+        const response = await callOpenRouterAPI(prompt);
+        if (response && typeof response === 'object' && response.content) {
+            return response.content;
+        }
+
+        if (typeof response === 'string') {
+            return response;
+        }
+        return "⚠️ AI analysis temporarily unavailable.";
+    } catch (error) {
+        console.error('AI analysis failed:', error);
+        return "⚠️ AI analysis temporarily unavailable.";
+    }
+}
+
+function initPoseCoach() {
+    const btn = document.getElementById('analyzeVideoBtn');
+    const sel = document.getElementById('exerciseSelect');
+    if (btn) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', analyzeUploadedVideo);
+    }
+    if (sel) sel.addEventListener('change', e => currentExercise = e.target.value);
+    console.log('✅ Pose Coach initialized (TF.js MoveNet)');
+}

@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "My Application"
 include(":app")
+include(":aichat-sdk")
+project(":aichat-sdk").projectDir = file("third_party/llama.cpp/examples/llama.android/lib")

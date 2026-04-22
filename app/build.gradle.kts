@@ -11,15 +11,31 @@ android {
     compileSdk {
         version = release(36)
     }
+    ndkVersion = "29.0.13113456"
     defaultConfig {
         applicationId = "com.example.myapplication"
-        minSdk = 26
+        minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+//app already depends on :aichat-sdk, and that module already has its own native build at third_party/llama.cpp/examples/llama.android/lib/build.gradle.kts.
+//        externalNativeBuild {
+//            cmake {
+//
+//                )
+//
+//            }
+//        }
     }
+//app already depends on :aichat-sdk, and that module already has its own native build at third_party/llama.cpp/examples/llama.android/lib/build.gradle.kts.
+//    externalNativeBuild {
+//        cmake {
+//
+//        }
+//    }
 
     buildTypes {
         release {
@@ -56,6 +72,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
     implementation(libs.firebase.crashlytics)
+    implementation(project(":aichat-sdk"))
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -64,4 +81,5 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation("androidx.health.connect:connect-client:1.2.0-alpha02")// Health Connect
 }
