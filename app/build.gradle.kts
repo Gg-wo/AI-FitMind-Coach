@@ -11,6 +11,7 @@ android {
     compileSdk {
         version = release(36)
     }
+    ndkVersion = "29.0.13113456"
     defaultConfig {
         applicationId = "com.example.myapplication"
         minSdk = 33
@@ -19,7 +20,22 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+//app already depends on :aichat-sdk, and that module already has its own native build at third_party/llama.cpp/examples/llama.android/lib/build.gradle.kts.
+//        externalNativeBuild {
+//            cmake {
+//
+//                )
+//
+//            }
+//        }
     }
+//app already depends on :aichat-sdk, and that module already has its own native build at third_party/llama.cpp/examples/llama.android/lib/build.gradle.kts.
+//    externalNativeBuild {
+//        cmake {
+//
+//        }
+//    }
 
     buildTypes {
         release {

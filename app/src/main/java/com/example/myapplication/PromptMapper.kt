@@ -12,7 +12,7 @@ object PromptMapper {
 
         // 1. append history
         history.takeLast(10).forEach { msg ->
-            // 使用 trim() 去掉首尾多餘的換行或空格
+            // trim()
             val cleanContent = msg.content.trim()
             if (cleanContent.isNotEmpty()) {
                 sb.append(TURN_START).append(msg.role).append("\n")

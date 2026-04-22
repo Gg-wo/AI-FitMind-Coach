@@ -14,7 +14,6 @@ import androidx.lifecycle.viewModelScope
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -22,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ChatViewModel : ViewModel() {
     private var isInitialized = false
     private val isWebGenerating = AtomicBoolean(false)
+    private val tokenUiThrottleMs = 100L
 
     private val messageHistory = mutableListOf<ChatMessage>(
         ChatMessage("system", "You are a helpful ai fitness coach.")
@@ -52,7 +52,7 @@ class ChatViewModel : ViewModel() {
 
                 inferenceEngine.loadModel(modelPath)
 
-                inferenceEngine.setSystemPrompt("You are a helpful ai assistant.")
+                inferenceEngine.setSystemPrompt("You are a helpful ai coach.")
 
                 withContext(Dispatchers.Main) {
                     addMessage(UiChatMessage(role = "system", answer = "Model initialized success!"))
@@ -108,39 +108,58 @@ class ChatViewModel : ViewModel() {
                     isModelLoading = true
                     var fullAiResponse = ""
                     var isInsideThinking = false
+                    val pendingThinking = StringBuilder()
+                    val pendingAnswer = StringBuilder()
+                    var lastUiFlushAt = 0L
 
-                    engine?.sendUserPrompt(formattedPrompt, 1024)?.collect { token ->
-                        fullAiResponse += token
+                    suspend fun flushUi(force: Boolean = false) {
+                        if (pendingThinking.isEmpty() && pendingAnswer.isEmpty()) return
+                        val now = System.currentTimeMillis()
+                        if (!force && now - lastUiFlushAt < tokenUiThrottleMs) return
+
+                        val thinkingChunk = pendingThinking.toString()
+                        val answerChunk = pendingAnswer.toString()
+                        pendingThinking.clear()
+                        pendingAnswer.clear()
+                        lastUiFlushAt = now
 
                         withContext(Dispatchers.Main) {
                             messages = messages.map { msg ->
                                 if (msg.id == aiMsg.id) {
-                                    // check if model start thinking
-                                    if (token.contains("<|channel>")) {
-                                        isInsideThinking = true
-                                        // clean the extra string
-                                        val cleanedToken = token.replace("<|channel>thought", "").replace("<|channel>", "")
-                                        msg.copy(thinking = (msg.thinking ?: "") + cleanedToken) // possible add nothing
-                                    }
-                                    // check if model thinking end
-                                    else if (token.contains("<channel|>")) {
-                                        isInsideThinking = false
-                                        val cleanedToken = token.replace("<channel|>", "")
-                                        // add to answer
-                                        msg.copy(answer = msg.answer + cleanedToken) // possible add nothing
-                                    }
-                                    // other non "channel" tokens
-                                    else if (isInsideThinking) {
-                                        msg.copy(thinking = (msg.thinking ?: "") + token)
-                                    } else {
-                                        msg.copy(answer = msg.answer + token)
-                                    }
+                                    msg.copy(
+                                        thinking = if (thinkingChunk.isNotEmpty()) (msg.thinking ?: "") + thinkingChunk else msg.thinking,
+                                        answer = if (answerChunk.isNotEmpty()) msg.answer + answerChunk else msg.answer
+                                    )
                                 } else {
                                     msg
                                 }
                             }
                         }
                     }
+
+                    engine?.sendUserPrompt(formattedPrompt, 1024)?.collect { token ->
+                        fullAiResponse += token
+
+                        when {
+                            token.contains("<|channel>") -> {
+                                isInsideThinking = true
+                                val cleanedToken = token.replace("<|channel>thought", "").replace("<|channel>", "")
+                                pendingThinking.append(cleanedToken)
+                            }
+                            token.contains("<channel|>") -> {
+                                isInsideThinking = false
+                                val cleanedToken = token.replace("<channel|>", "")
+                                pendingAnswer.append(cleanedToken)
+                            }
+                            isInsideThinking -> pendingThinking.append(token)
+                            else -> pendingAnswer.append(token)
+                        }
+
+                        flushUi()
+                    }
+
+                    flushUi(force = true)
+
                     Log.d(LogTags.CHATVM, "============================================")
                     Log.d(LogTags.CHATVM, "<<< FULL OUTPUT <<<\n$fullAiResponse")
                     Log.d(LogTags.CHATVM, "============================================")
@@ -198,9 +217,42 @@ class ChatViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             var isInsideThinking = false
             val answerBuilder = StringBuilder()
+            val pendingAnswerUi = StringBuilder()
+            var lastUiFlushAt = 0L
+
+            // --- check performance ---
+            var tokenCount = 0
+            var startTime = 0L
+            // -----------------------
+
+            suspend fun flushWebUi(force: Boolean = false) {
+                if (pendingAnswerUi.isEmpty()) return
+                val now = System.currentTimeMillis()
+                if (!force && now - lastUiFlushAt < tokenUiThrottleMs) return
+
+                val chunk = pendingAnswerUi.toString()
+                pendingAnswerUi.clear()
+                lastUiFlushAt = now
+
+                withContext(Dispatchers.Main) {
+                    onToken(chunk)
+                }
+            }
 
             try {
                 engine?.sendUserPrompt(formattedPrompt, 1024)?.collect { token ->
+                    // --- check performance ---
+                    if (tokenCount == 0) startTime = System.currentTimeMillis()
+                    tokenCount++
+
+                    val currentTime = System.currentTimeMillis()
+                    val durationSeconds = (currentTime - startTime) / 1000.0
+
+                    if (durationSeconds > 0 && tokenCount % 10 == 0) {
+                        val tps = tokenCount / durationSeconds
+                        Log.d("Performance", "Web Mode -> Tokens: $tokenCount | Speed: ${String.format("%.2f", tps)} t/s")
+                    }
+                    // -----------------------
                     val answerToken = when {
                         token.contains("<|channel>thought") || token.contains("<|channel>") -> {
                             isInsideThinking = true
@@ -216,13 +268,20 @@ class ChatViewModel : ViewModel() {
 
                     if (answerToken.isNotEmpty()) {
                         answerBuilder.append(answerToken)
-                        withContext(Dispatchers.Main) {
-                            onToken(answerToken)
-                        }
+                        pendingAnswerUi.append(answerToken)
+                        flushWebUi()
                     }
                 }
 
+                flushWebUi(force = true)
+
                 val finalAnswer = answerBuilder.toString().trim()
+                // --- check performance ---
+                val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
+                Log.i("Performance", "=== Web generation end ===")
+                Log.i("Performance", "total Token: $tokenCount | average speed: ${String.format("%.2f", tokenCount / totalTime)} t/s")
+                // -----------------------
+
                 messageHistory.add(ChatMessage("model", finalAnswer))
                 withContext(Dispatchers.Main) {
                     onComplete(finalAnswer)
