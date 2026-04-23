@@ -26,7 +26,7 @@ object DatabaseProvider {
                 .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
-                .also { INSTANCE = 
+                .also { INSTANCE = it }
         }
     }
 }
