@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
             try {
                 val db = DatabaseProvider.get(applicationContext)
                 Log.i("USER_INIT", "db acquired")
+                withContext(Dispatchers.IO) { DbSchemaLogger.dump(db) }
                 val currentUserId = withContext(Dispatchers.IO) {
                     TestUserInitializer.initialize(applicationContext, db)
                 }

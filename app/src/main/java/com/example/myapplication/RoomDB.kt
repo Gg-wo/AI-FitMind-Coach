@@ -10,7 +10,7 @@ import androidx.room.TypeConverters
         Chat::class,
         Message::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(UUIDConverter::class, FitnessLevelConverter::class, StringListConverter::class)

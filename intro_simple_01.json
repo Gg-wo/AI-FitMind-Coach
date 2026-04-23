@@ -1,0 +1,6 @@
+{
+    "instruction": "<|turn>system\nYou are a helpful assistant.<turn|>\n<|turn>user\nHello.<turn|>",
+    "raw_output": " Hello! How can I help you today?",
+    "timestamp": 1776943967.6335306,
+    "model": "gemma4_local_q4"
+}
