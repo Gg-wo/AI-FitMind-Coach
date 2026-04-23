@@ -252,6 +252,16 @@
                 </div>
 
                 <div class="chat-input-area">
+                    <!-- Thinking toggle hidden by request; default thinking is enabled from JS bridge sync. -->
+                    <!--
+                    <div style="padding: 6px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-color);">
+                        <button id="thinkingToggleBtn"
+                                onclick="localLlmChat.toggleThinking()"
+                                style="padding: 4px 14px; border-radius: 16px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.2s;">
+                            💭 Thinking: OFF
+                        </button>
+                    </div>
+                    -->
                     <div class="chat-input-row">
                         <input type="text" id="localLlmQuestion" class="chat-input" placeholder="Ask local model..." onkeypress="if(event.key === 'Enter') localLlmChat.send()">
                         <button onclick="localLlmChat.send()" class="chat-send-btn">➤</button>

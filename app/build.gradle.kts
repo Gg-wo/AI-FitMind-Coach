@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.google.firebase.crashlytics)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -11,6 +12,7 @@ android {
     compileSdk {
         version = release(36)
     }
+    ndkVersion = "29.0.13113456"
     defaultConfig {
         applicationId = "com.example.myapplication"
         minSdk = 33
@@ -19,7 +21,22 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+//app already depends on :aichat-sdk, and that module already has its own native build at third_party/llama.cpp/examples/llama.android/lib/build.gradle.kts.
+//        externalNativeBuild {
+//            cmake {
+//
+//                )
+//
+//            }
+//        }
     }
+//app already depends on :aichat-sdk, and that module already has its own native build at third_party/llama.cpp/examples/llama.android/lib/build.gradle.kts.
+//    externalNativeBuild {
+//        cmake {
+//
+//        }
+//    }
 
     buildTypes {
         release {
@@ -57,6 +74,12 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.firebase.crashlytics)
     implementation(project(":aichat-sdk"))
+    implementation("com.google.code.gson:gson:2.13.2")
+
+    val room_version = "2.8.4"
+    implementation("androidx.room:room-runtime:${room_version}")
+    ksp("androidx.room:room-compiler:$room_version")
+    implementation("androidx.room:room-ktx:${room_version}")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
