@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.google.firebase.crashlytics)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -74,6 +75,12 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation(project(":aichat-sdk"))
+    implementation("com.google.code.gson:gson:2.13.2")
+
+    val room_version = "2.8.4"
+    implementation("androidx.room:room-runtime:${room_version}")
+    ksp("androidx.room:room-compiler:$room_version")
+    implementation("androidx.room:room-ktx:${room_version}")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
