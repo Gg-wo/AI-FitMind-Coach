@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MyApplication" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Disable splash screen on Android 12+ by setting background to windowBackground -->
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <!-- Set window background immediately -->
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "695472345697",
+    "project_id": "fitmind-ai-eba88",
+    "storage_bucket": "fitmind-ai-eba88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:695472345697:android:4ad1e1929225a5c70dd020",
+        "android_client_info": {
+          "package_name": "com.example.myapplication"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "695472345697-bhknh4518tsii4ma97k5aog6u0j187ul.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoYgyDBBqLkO0aaQrdM-iiOqPwDcHbf3I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "695472345697-bhknh4518tsii4ma97k5aog6u0j187ul.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
