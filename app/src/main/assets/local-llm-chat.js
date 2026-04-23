@@ -3,6 +3,7 @@
     const pendingResponses = {};
     let modelFileNotFound = false;
     let statusInterval = null;
+    let currentLoadingState = null;
 
     function getEl(id) {
         return document.getElementById(id);
@@ -17,6 +18,19 @@
         if (!status) return;
         status.textContent = text;
         status.style.color = ok ? '#4ade80' : 'var(--text-muted)';
+    }
+
+    function setLoadingPanel(visible, title, subtitle) {
+        const panel = getEl('localLlmLoadingPanel');
+        const titleEl = getEl('localLlmLoadingTitle');
+        const subtitleEl = getEl('localLlmLoadingSubtitle');
+
+        if (!panel) return;
+
+        panel.style.display = visible ? 'flex' : 'none';
+        if (titleEl && title) titleEl.textContent = title;
+        if (subtitleEl && subtitle) subtitleEl.textContent = subtitle;
+        currentLoadingState = visible;
     }
 
     function appendUserMessage(content) {
@@ -97,23 +111,52 @@
     function refreshModelStatus() {
         if (modelFileNotFound) {
             setStatus('Model file not found. Place the model file on device and restart.', false);
+            setLoadingPanel(false);
             setInputEnabled(false);
             return false;
         }
 
         if (!ensureBridge()) {
             setStatus('Android local model bridge not available', false);
+            setLoadingPanel(false);
             setInputEnabled(false);
             return false;
         }
 
         try {
             const ready = !!window.AndroidLocalLLM.isModelReady();
-            setStatus(ready ? 'Local model ready' : 'Loading local model...', ready);
+            if (ready) {
+                setStatus('Local model ready', true);
+                setLoadingPanel(false);
+            } else {
+                setStatus('Loading local model...', false);
+                setLoadingPanel(
+                    true,
+                    'Loading local model...',
+                    'This can take a few minutes on an emulator. Please wait until the status changes to ready.'
+                );
+            }
             setInputEnabled(ready);
+
+            if (!ready && statusInterval === null) {
+                statusInterval = setInterval(function () {
+                    const stillReady = refreshModelStatus();
+                    if (stillReady && statusInterval !== null) {
+                        clearInterval(statusInterval);
+                        statusInterval = null;
+                    }
+                }, 1500);
+            }
+
+            if (ready && statusInterval !== null) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+
             return ready;
         } catch (err) {
             setStatus('Local model unavailable', false);
+            setLoadingPanel(false);
             setInputEnabled(false);
             return false;
         }
@@ -123,6 +166,7 @@
         if (modelFileNotFound || !ensureBridge()) return;
         try {
             window.AndroidLocalLLM.initializeModelIfNeeded();
+            refreshModelStatus();
         } catch (err) {
             // ignore
         }
@@ -135,6 +179,13 @@
 
             const question = input.value.trim();
             if (!question) return;
+
+            if (!refreshModelStatus()) {
+                if (typeof window.showAlert === 'function') {
+                    window.showAlert('Local model is still loading. Please wait until it becomes ready.');
+                }
+                return;
+            }
 
 /*
 cannot trigger because i blocked the input if loading and not found
@@ -207,6 +258,7 @@ cannot trigger because i blocked the input if loading and not found
                     statusInterval = null;
                 }
                 setStatus('Model file not found. Place the model file on device and restart.', false);
+                setLoadingPanel(false);
                 setInputEnabled(false);
                 return;
             }

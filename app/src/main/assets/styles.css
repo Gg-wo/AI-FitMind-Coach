@@ -783,6 +783,52 @@ button.danger {
     font-size: 13px;
 }
 
+.local-llm-loading-panel {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 14px 20px 0 20px;
+    padding: 14px 16px;
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(255, 107, 53, 0.06));
+    border-radius: 16px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.local-llm-spinner {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 3px solid rgba(160, 174, 192, 0.25);
+    border-top-color: var(--accent-primary);
+    border-right-color: var(--accent-secondary);
+    animation: localLlmSpin 0.9s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes localLlmSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.local-llm-loading-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.local-llm-loading-title {
+    font-family: 'Chakra Petch', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.local-llm-loading-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
 .loading-dots {
     display: inline-flex;
     gap: 4px;

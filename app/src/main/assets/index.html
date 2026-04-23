@@ -242,6 +242,14 @@
                     <div id="localLlmStatus" style="font-size: 12px; color: var(--text-muted);">Checking model...</div>
                 </div>
 
+                <div id="localLlmLoadingPanel" class="local-llm-loading-panel" style="display: none;">
+                    <div class="local-llm-spinner" aria-hidden="true"></div>
+                    <div class="local-llm-loading-copy">
+                        <div class="local-llm-loading-title" id="localLlmLoadingTitle">Loading local model...</div>
+                        <div class="local-llm-loading-subtitle" id="localLlmLoadingSubtitle">This can take a few minutes on an emulator.</div>
+                    </div>
+                </div>
+
                 <div id="localLlmMessages" class="chat-messages">
                     <div class="coach-message">
                         <div class="coach-message-bubble">
