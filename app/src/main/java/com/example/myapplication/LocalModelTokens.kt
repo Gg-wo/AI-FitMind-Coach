@@ -3,10 +3,10 @@ package com.example.myapplication
 object LocalModelTokens {
     // ====================== turn ======================
     const val TURN_START = "<|turn>"
-    const val TURN_END = "<turn|>\\n"
-    const val TURN_SYSTEM = "<|turn>system\\n"
-    const val TURN_USER = "<|turn>user\\n"
-    const val TURN_MODEL = "<|turn>model\\n"
+    const val TURN_END = "<turn|>\n"
+    const val TURN_SYSTEM = "<|turn>system\n"
+    const val TURN_USER = "<|turn>user\n"
+    const val TURN_MODEL = "<|turn>model\n"
 
     // ====================== think ======================
     const val THINK_TRIGGER = "<|think|>"
