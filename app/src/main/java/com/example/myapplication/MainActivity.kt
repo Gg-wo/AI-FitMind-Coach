@@ -44,8 +44,10 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.*
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.health.connect.client.records.metadata.Metadata
 import org.json.JSONObject
+import kotlin.text.get
 
 
 class MainActivity : ComponentActivity() {
@@ -143,6 +145,22 @@ class MainActivity : ComponentActivity() {
                 WebViewScreen(modifier = Modifier.fillMaxSize())
             }
         }
+
+        //=====Test User for Local Model====
+        lifecycleScope.launch {
+            Log.i("USER_INIT", "launch started")
+            try {
+                val db = DatabaseProvider.get(applicationContext)
+                Log.i("USER_INIT", "db acquired")
+                val currentUserId = withContext(Dispatchers.IO) {
+                    TestUserInitializer.initialize(applicationContext, db)
+                }
+                Log.i("USER_INIT", "Current userId = $currentUserId")
+            } catch (t: Throwable) {
+                Log.e("USER_INIT", "Initialization failed", t)
+            }
+        }
+        //===================================
 
         // load local model
         val modelFile = java.io.File(getExternalFilesDir(null), localModelFileName)
@@ -297,13 +315,35 @@ class MainActivity : ComponentActivity() {
             chatViewModel.initializeModelIfNeeded(this@MainActivity, modelFile.absolutePath)
         }
 
+        /** Toggle the thinking channel on or off. Called from JS when the user taps the thinking button. */
+        @JavascriptInterface
+        fun setThinkingEnabled(enabled: Boolean) {
+            chatViewModel.setThinkingEnabled(enabled)
+        }
+
         @JavascriptInterface
         fun sendMessage(message: String, callbackId: String) {
             chatViewModel.sendMessageForWeb(
+                context = this@MainActivity,
                 userContent = message,
                 onToken = { token -> dispatchLocalLlmToken(callbackId, token) },
+                onThinkingToken = { token -> dispatchLocalLlmThinkingToken(callbackId, token) },
+                onThinkingDone = { dispatchLocalLlmThinkingDone(callbackId) },
+                onAnswerReset = { dispatchLocalLlmAnswerReset(callbackId) },
                 onComplete = { full -> dispatchLocalLlmComplete(callbackId, full) },
                 onError = { err -> dispatchLocalLlmError(callbackId, err) }
+            )
+        }
+
+        /**
+         * Load the latest chat from Room DB and pass it back to JS.
+         * JS receives the result via window.localLlmChat.onChatLoaded(callbackId, jsonStr).
+         */
+        @JavascriptInterface
+        fun loadLatestChat(callbackId: String) {
+            chatViewModel.loadLatestChat(
+                context = this@MainActivity,
+                onLoaded = { jsonStr -> dispatchLocalLlmChatLoaded(callbackId, jsonStr) }
             )
         }
     }
@@ -361,6 +401,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun dispatchLocalLlmThinkingToken(callbackId: String, token: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onThinkingToken(${toJsString(callbackId)}, ${toJsString(token)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchLocalLlmThinkingDone(callbackId: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onThinkingDone(${toJsString(callbackId)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchLocalLlmAnswerReset(callbackId: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onAnswerReset(${toJsString(callbackId)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
     private fun dispatchLocalLlmComplete(callbackId: String, full: String) {
         runOnUiThread {
             val script = "window.localLlmChat && window.localLlmChat.onComplete(${toJsString(callbackId)}, ${toJsString(full)})"
@@ -371,6 +432,13 @@ class MainActivity : ComponentActivity() {
     private fun dispatchLocalLlmError(callbackId: String, error: String) {
         runOnUiThread {
             val script = "window.localLlmChat && window.localLlmChat.onError(${toJsString(callbackId)}, ${toJsString(error)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchLocalLlmChatLoaded(callbackId: String, jsonStr: String) {
+        runOnUiThread {
+            val script = "window.localLlmChat && window.localLlmChat.onChatLoaded(${toJsString(callbackId)}, ${toJsString(jsonStr)})"
             webView.evaluateJavascript(script, null)
         }
     }
