@@ -2,6 +2,8 @@ package com.example.myapplication
 
 object LocalModelOutputRawContentHandler {
 
+
+
     private fun normalize(raw: String): String = raw.replace("\r\n", "\n")
 
     fun sanitizeThinkingContent(rawThinking: String?): String? {
