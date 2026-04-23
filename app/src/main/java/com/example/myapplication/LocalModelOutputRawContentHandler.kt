@@ -37,7 +37,9 @@ object LocalModelOutputRawContentHandler {
     // If it does, the model started hallucinating a new prompt — treat as error.
     fun validateRawOutput(raw: String): Boolean {
         return !raw.contains(LocalModelTokens.TURN_SYSTEM) &&
-                !raw.contains(LocalModelTokens.TURN_USER)
+                !raw.contains(LocalModelTokens.TURN_USER) &&
+                !raw.contains(LocalModelTokens.TURN_MODEL) &&
+                !raw.contains(LocalModelTokens.TURN_START)
     }
 
     // Extract thinking content (text before <channel|>)

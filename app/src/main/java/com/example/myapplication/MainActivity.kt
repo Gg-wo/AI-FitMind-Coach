@@ -150,7 +150,9 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             Log.i("USER_INIT", "launch started")
             try {
-                val db = DatabaseProvider.get(applicationContext)
+                val db = withContext(Dispatchers.IO) {
+                    DatabaseProvider.get(applicationContext)
+                }
                 Log.i("USER_INIT", "db acquired")
                 val currentUserId = withContext(Dispatchers.IO) {
                     TestUserInitializer.initialize(applicationContext, db)
@@ -396,49 +398,49 @@ class MainActivity : ComponentActivity() {
 
     private fun dispatchLocalLlmToken(callbackId: String, token: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onToken(${toJsString(callbackId)}, ${toJsString(token)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onToken === 'function' && window.localLlmChat.onToken(${toJsString(callbackId)}, ${toJsString(token)})"
             webView.evaluateJavascript(script, null)
         }
     }
 
     private fun dispatchLocalLlmThinkingToken(callbackId: String, token: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onThinkingToken(${toJsString(callbackId)}, ${toJsString(token)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onThinkingToken === 'function' && window.localLlmChat.onThinkingToken(${toJsString(callbackId)}, ${toJsString(token)})"
             webView.evaluateJavascript(script, null)
         }
     }
 
     private fun dispatchLocalLlmThinkingDone(callbackId: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onThinkingDone(${toJsString(callbackId)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onThinkingDone === 'function' && window.localLlmChat.onThinkingDone(${toJsString(callbackId)})"
             webView.evaluateJavascript(script, null)
         }
     }
 
     private fun dispatchLocalLlmAnswerReset(callbackId: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onAnswerReset(${toJsString(callbackId)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onAnswerReset === 'function' && window.localLlmChat.onAnswerReset(${toJsString(callbackId)})"
             webView.evaluateJavascript(script, null)
         }
     }
 
     private fun dispatchLocalLlmComplete(callbackId: String, full: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onComplete(${toJsString(callbackId)}, ${toJsString(full)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onComplete === 'function' && window.localLlmChat.onComplete(${toJsString(callbackId)}, ${toJsString(full)})"
             webView.evaluateJavascript(script, null)
         }
     }
 
     private fun dispatchLocalLlmError(callbackId: String, error: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onError(${toJsString(callbackId)}, ${toJsString(error)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onError === 'function' && window.localLlmChat.onError(${toJsString(callbackId)}, ${toJsString(error)})"
             webView.evaluateJavascript(script, null)
         }
     }
 
     private fun dispatchLocalLlmChatLoaded(callbackId: String, jsonStr: String) {
         runOnUiThread {
-            val script = "window.localLlmChat && window.localLlmChat.onChatLoaded(${toJsString(callbackId)}, ${toJsString(jsonStr)})"
+            val script = "window.localLlmChat && typeof window.localLlmChat.onChatLoaded === 'function' && window.localLlmChat.onChatLoaded(${toJsString(callbackId)}, ${toJsString(jsonStr)})"
             webView.evaluateJavascript(script, null)
         }
     }

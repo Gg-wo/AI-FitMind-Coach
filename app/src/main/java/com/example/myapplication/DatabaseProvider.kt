@@ -12,7 +12,10 @@ object DatabaseProvider {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "my_app_db"
-            ).build().also { INSTANCE = it }
+            )
+                .fallbackToDestructiveMigration()
+                .build()
+                .also { INSTANCE = it }
         }
     }
 }

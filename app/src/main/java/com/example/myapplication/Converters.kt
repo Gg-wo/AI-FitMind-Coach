@@ -48,7 +48,7 @@ class FitnessLevelConverter {
             try {
                 FitnessLevel.valueOf(it)
             } catch (e: IllegalArgumentException) {
-                FitnessLevel.BEGINNER
+                null
             }
         }
     }

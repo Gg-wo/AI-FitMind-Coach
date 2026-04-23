@@ -3,12 +3,14 @@ package com.example.myapplication
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
 //---not support, not finish---
 @Entity(
     tableName = "training_exercise",
+    indices = [Index(value = ["training_day_id"])],
     foreignKeys = [ForeignKey(
         entity = TrainingDay::class,
         parentColumns = ["training_day_id"],
@@ -36,6 +38,7 @@ data class TrainingExercise(
 //---not support, not finish---
 @Entity(
     tableName = "training_day",
+    indices = [Index(value = ["user_id"])],
     foreignKeys = [ForeignKey(
         entity = UserProfile::class,
         parentColumns = ["user_id"],
@@ -72,6 +75,7 @@ data class UserProfile(
 
 @Entity(
     tableName = "chat",
+    indices = [Index(value = ["user_id"])],
     foreignKeys = [ForeignKey(
         entity = UserProfile::class,
         parentColumns = ["user_id"],
@@ -93,6 +97,7 @@ data class Chat(
 
 @Entity(
     tableName = "message",
+    indices = [Index(value = ["chat_id"]), Index(value = ["user_id"])],
     foreignKeys = [
         ForeignKey(
             entity = Chat::class,

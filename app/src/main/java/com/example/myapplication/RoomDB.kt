@@ -8,9 +8,11 @@ import androidx.room.TypeConverters
     entities = [
         UserProfile::class,
         Chat::class,
-        Message::class
+        Message::class,
+        TrainingDay::class,
+        TrainingExercise::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(UUIDConverter::class, FitnessLevelConverter::class, StringListConverter::class)
