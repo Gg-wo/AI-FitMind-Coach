@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
     implementation(libs.firebase.crashlytics)
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation(project(":aichat-sdk"))
 
     testImplementation(libs.junit)

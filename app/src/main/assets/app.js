@@ -64,6 +64,13 @@ function getCurrentChatIdStorageKey() {
     return STORAGE_KEYS.CURRENT_CHAT_ID;
 }
 
+function getTrainingPlanStorageKey() {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        return `fitmind_training_plan_data_${window.auth.currentUser.uid}`;
+    }
+    return 'fitmind_training_plan_data';
+}
+
 function getLocalProfile() {
     const key = getProfileStorageKey();
     const profileData = localStorage.getItem(key);
@@ -427,9 +434,21 @@ function clearAllStoredData() {
     localStorage.removeItem(getWorkoutHistoryStorageKey());
     localStorage.removeItem(getChatSessionsStorageKey());
     localStorage.removeItem(getCurrentChatIdStorageKey());
+    localStorage.removeItem(getTrainingPlanStorageKey());
     workoutHistory = [];
     chatSessions = [];
     currentChatId = null;
+
+    if (typeof window.trainingPlanData === 'object') {
+        window.trainingPlanData = {};
+        if (typeof renderCalendar === 'function') {
+            renderCalendar();
+        }
+    }
+
+    if (window.localLlmChat && typeof window.localLlmChat.clearHistory === 'function') {
+        window.localLlmChat.clearHistory();
+    }
 
     if (window.firebaseSync && typeof window.firebaseSync.deleteAllChatsFromCloud === 'function') {
         window.firebaseSync.deleteAllChatsFromCloud().catch((error) => {
@@ -440,6 +459,12 @@ function clearAllStoredData() {
     if (window.firebaseSync && typeof window.firebaseSync.deleteAllWorkoutsFromCloud === 'function') {
         window.firebaseSync.deleteAllWorkoutsFromCloud().catch((error) => {
             console.error('❌ Cloud workout clear failed:', error);
+        });
+    }
+
+    if (window.firebaseSync && typeof window.firebaseSync.clearTrainingPlanFromCloud === 'function') {
+        window.firebaseSync.clearTrainingPlanFromCloud().catch((error) => {
+            console.error('❌ Cloud training plan clear failed:', error);
         });
     }
     console.log('✓ Cleared Cache');
@@ -826,21 +851,16 @@ async function startWorkout() {
 
     // Start updating metrics
     workoutInterval = setInterval(updateWorkoutMetrics, 1000);
-    // base on the button to choose which data
-        const useRealHr = document.getElementById('useRealHrToggle').checked;
-        if (useRealHr && HealthConnectManager.checkAvailability()) {
-            // use real data
-            HealthConnectManager.setUseRealData(true, (hr) => {
-                if (workoutActive) updateMetricsWithRealHR(hr);
-            });
+    // Switch to real Health Connect heart rate only when the toggle is enabled.
+    const useRealHr = document.getElementById('useRealHrToggle').checked;
+    if (useRealHr && HealthConnectManager.checkAvailability()) {
+        HealthConnectManager.setUseRealData(true, (hr) => {
+            if (workoutActive) updateMetricsWithRealHR(hr);
+        });
 
-            if (workoutInterval) clearInterval(workoutInterval);
-            workoutInterval = null;
-        } else {
-            // use research data
-            if (workoutInterval) clearInterval(workoutInterval);
-            workoutInterval = setInterval(updateWorkoutMetrics, 1000);
-        }
+        if (workoutInterval) clearInterval(workoutInterval);
+        workoutInterval = null;
+    }
 }
 
 // Update workout metrics
@@ -2602,17 +2622,21 @@ function exportData() {
  * Delete all local data
  */
 function deleteAllData() {
-    showConfirmDialog('⚠️ This will delete ALL your local workout and chat data. This action cannot be undone. Are you sure?', () => {
+    showConfirmDialog('⚠️ This will delete ALL your local workout, chat, and training plan data. This action cannot be undone. Are you sure?', () => {
         const keysToClear = [
             getWorkoutHistoryStorageKey(),
             getChatSessionsStorageKey(),
             getCurrentChatIdStorageKey(),
-            getProfileStorageKey()
+            getProfileStorageKey(),
+            getTrainingPlanStorageKey()
         ];
         keysToClear.forEach(key => localStorage.removeItem(key));
         workoutHistory = [];
         chatSessions = [];
         currentChatId = null;
+        if (typeof window.trainingPlanData === 'object') {
+            window.trainingPlanData = {};
+        }
         
         // Reload page to reset state
         showAlert('All local data deleted. Page will reload...');
@@ -3391,6 +3415,7 @@ function toggleHrSource() {
     const statusSpan = document.getElementById('hrSourceStatus');
     if (toggle.checked) {
         if (HealthConnectManager.checkAvailability()) {
+            HealthConnectManager.requestPermissionsIfNeeded();
             // if doing workout and need to switch
             if (workoutActive) {
                 // stop research data
@@ -3428,6 +3453,38 @@ function toggleHrSource() {
 // ============================================================
 let poseDetector = null;
 let currentExercise = 'dumbbell_bench_press';
+let currentPoseAnalysisMode = 'balanced';
+
+function getPoseAnalysisConfig(mode) {
+    const presets = {
+        fast: {
+            label: 'Fast',
+            targetSamplesPerSecond: 1,
+            maxFrames: 30,
+            minFrames: 8,
+            summaryFrameCount: 5,
+            responseWordRange: '80-130'
+        },
+        balanced: {
+            label: 'Balanced',
+            targetSamplesPerSecond: 2,
+            maxFrames: 60,
+            minFrames: 12,
+            summaryFrameCount: 8,
+            responseWordRange: '120-180'
+        },
+        accurate: {
+            label: 'Accurate',
+            targetSamplesPerSecond: 3,
+            maxFrames: 90,
+            minFrames: 18,
+            summaryFrameCount: 10,
+            responseWordRange: '150-220'
+        }
+    };
+
+    return presets[mode] || presets.balanced;
+}
 
 // ---------- Load the model (fix the backend initialization)----------
 async function loadPoseModel() {
@@ -3493,6 +3550,10 @@ function calculateAngle(a, b, c) {
     return rad * 180 / Math.PI;
 }
 
+function hasReliableKeypoints(keypoints, indices, minScore = 0.35) {
+    return indices.every(index => keypoints[index] && (keypoints[index].score ?? 1) >= minScore);
+}
+
 // ---------- 3.Extracting from the perspective of key points (MoveNet 17 points)----------
 function extractAngles(keypoints) {
     const angles = {};
@@ -3501,19 +3562,19 @@ function extractAngles(keypoints) {
 
     if (ex.includes('bench_press')) {
         //Elbow angle (shoulder - elbow - wrist)
-        if (keypoints[5] && keypoints[7] && keypoints[9]) angles.leftElbow = calculateAngle(keypoints[5], keypoints[7], keypoints[9]);
-        if (keypoints[6] && keypoints[8] && keypoints[10]) angles.rightElbow = calculateAngle(keypoints[6], keypoints[8], keypoints[10]);
+        if (hasReliableKeypoints(keypoints, [5, 7, 9])) angles.leftElbow = calculateAngle(keypoints[5], keypoints[7], keypoints[9]);
+        if (hasReliableKeypoints(keypoints, [6, 8, 10])) angles.rightElbow = calculateAngle(keypoints[6], keypoints[8], keypoints[10]);
         // Shoulder abduction angle (hip - shoulder - elbow), used to check if the elbow is overly extended (Shoulder Flare)
-        if (keypoints[11] && keypoints[5] && keypoints[7]) angles.leftShoulder = calculateAngle(keypoints[11], keypoints[5], keypoints[7]);
-        if (keypoints[12] && keypoints[6] && keypoints[8]) angles.rightShoulder = calculateAngle(keypoints[12], keypoints[6], keypoints[8]);
+        if (hasReliableKeypoints(keypoints, [11, 5, 7])) angles.leftShoulder = calculateAngle(keypoints[11], keypoints[5], keypoints[7]);
+        if (hasReliableKeypoints(keypoints, [12, 6, 8])) angles.rightShoulder = calculateAngle(keypoints[12], keypoints[6], keypoints[8]);
     }
     else if (ex === 'squat' || ex === 'deadlift') {
         // Hip joint angle / Spine angle (shoulder - hip - knee)
-        if (keypoints[5] && keypoints[11] && keypoints[13]) angles.leftHip = calculateAngle(keypoints[5], keypoints[11], keypoints[13]);
-        if (keypoints[6] && keypoints[12] && keypoints[14]) angles.rightHip = calculateAngle(keypoints[6], keypoints[12], keypoints[14]);
+        if (hasReliableKeypoints(keypoints, [5, 11, 13])) angles.leftHip = calculateAngle(keypoints[5], keypoints[11], keypoints[13]);
+        if (hasReliableKeypoints(keypoints, [6, 12, 14])) angles.rightHip = calculateAngle(keypoints[6], keypoints[12], keypoints[14]);
         // Knee joint angle (hip-knee-ankle)
-        if (keypoints[11] && keypoints[13] && keypoints[15]) angles.leftKnee = calculateAngle(keypoints[11], keypoints[13], keypoints[15]);
-        if (keypoints[12] && keypoints[14] && keypoints[16]) angles.rightKnee = calculateAngle(keypoints[12], keypoints[14], keypoints[16]);
+        if (hasReliableKeypoints(keypoints, [11, 13, 15])) angles.leftKnee = calculateAngle(keypoints[11], keypoints[13], keypoints[15]);
+        if (hasReliableKeypoints(keypoints, [12, 14, 16])) angles.rightKnee = calculateAngle(keypoints[12], keypoints[14], keypoints[16]);
     }
     return angles;
 }
@@ -3541,21 +3602,30 @@ async function analyzeUploadedVideo() {
     feedbackDiv.innerHTML = '📹 uploading video...';
     await new Promise(resolve => { video.onloadedmetadata = resolve; });
     const duration = video.duration;
+    const analysisConfig = getPoseAnalysisConfig(currentPoseAnalysisMode);
 
-    const interval = 0.5; // second
-    let numSamples = Math.floor(duration / interval) + 1;
-    numSamples = Math.min(numSamples, 30); // max 30 frame
+    // Sample across the FULL video span instead of only the first 15s.
+    // We keep an upper cap for performance, but distribute frames evenly from 0s -> duration.
+    const targetSamplesPerSecond = analysisConfig.targetSamplesPerSecond;
+    const maxFrames = analysisConfig.maxFrames;
+    const minFrames = analysisConfig.minFrames;
+    let numSamples = Math.ceil(duration * targetSamplesPerSecond) + 1;
+    numSamples = Math.max(minFrames, numSamples);
+    numSamples = Math.min(numSamples, maxFrames);
+
     const sampleTimes = [];
-    for (let i = 0; i < numSamples; i++) {
-        sampleTimes.push(i * interval);
+    if (numSamples <= 1 || duration <= 0) {
+        sampleTimes.push(0);
+    } else {
+        const step = duration / (numSamples - 1);
+        for (let i = 0; i < numSamples; i++) {
+            sampleTimes.push(Math.min(duration, i * step));
+        }
     }
-    // make sure last frame wont over the length of video
-    if (sampleTimes[sampleTimes.length - 1] > duration) {
-        sampleTimes[sampleTimes.length - 1] = duration;
-    }
-    let allAngles = [];
+
+    let measuredFrames = [];
     let frameDetails = [];
-    feedbackDiv.innerHTML = `🔍 analyzing ${numSamples} frame...`;
+    feedbackDiv.innerHTML = `🔍 [${analysisConfig.label}] analyzing ${numSamples} frames across ${duration.toFixed(1)}s...`;
     for (let idx = 0; idx < sampleTimes.length; idx++) {
         const t = sampleTimes[idx];
         video.currentTime = t;
@@ -3569,8 +3639,15 @@ async function analyzeUploadedVideo() {
             const poses = await poseDetector.estimatePoses(canvas);
             if (poses && poses.length > 0 && poses[0].keypoints) {
                 const angles = extractAngles(poses[0].keypoints);
-                allAngles.push(angles);
-                frameDetails.push(`At ${t.toFixed(1)}s: ${JSON.stringify(angles)}`);
+                if (Object.keys(angles).length > 0) {
+                    measuredFrames.push({
+                        time: t,
+                        angles
+                    });
+                    frameDetails.push(`At ${t.toFixed(1)}s: ${JSON.stringify(angles)}`);
+                } else {
+                    frameDetails.push(`At ${t.toFixed(1)}s: Low confidence keypoints`);
+                }
             } else {
                 frameDetails.push(`At ${t.toFixed(1)}s: Cannot detect body`);
             }
@@ -3580,8 +3657,8 @@ async function analyzeUploadedVideo() {
         }
         feedbackDiv.innerHTML = `🔍 analyzing (${idx+1}/${numSamples})...`;
     }
-    if (allAngles.length === 0) {
-        feedbackDiv.innerHTML = '❌ Cannot detect body';
+    if (measuredFrames.length === 0) {
+        feedbackDiv.innerHTML = '❌ Cannot detect reliable body keypoints';
         return;
     }
     /*const avgAngles = {};
@@ -3589,17 +3666,30 @@ async function analyzeUploadedVideo() {
         avgAngles[key] = allAngles.reduce((s,a) => s + a[key], 0) / allAngles.length;
     }*/
     const extremeAngles = {};
-    for (let key of Object.keys(allAngles[0])) {
-        const values = allAngles.map(a => a[key]).filter(v => !isNaN(v));
+    const metricNames = new Set();
+    measuredFrames.forEach(frame => {
+        Object.keys(frame.angles).forEach(key => metricNames.add(key));
+    });
+
+    for (let key of metricNames) {
+        const values = measuredFrames
+            .map(frame => ({ value: frame.angles[key], time: frame.time }))
+            .filter(item => !isNaN(item.value));
+
         if (values.length > 0) {
+            const minItem = values.reduce((best, item) => item.value < best.value ? item : best, values[0]);
+            const maxItem = values.reduce((best, item) => item.value > best.value ? item : best, values[0]);
             extremeAngles[key] = {
-                min: Math.round(Math.min(...values)),
-                max: Math.round(Math.max(...values))
+                min: Math.round(minItem.value),
+                minTime: Number(minItem.time.toFixed(1)),
+                max: Math.round(maxItem.value),
+                maxTime: Number(maxItem.time.toFixed(1)),
+                sampleCount: values.length
             };
         }
     }
     feedbackDiv.innerHTML = '🤖 requesting AI analysis...';
-    const aiResponse = await callPoseAI(currentExercise, extremeAngles, frameDetails);
+    const aiResponse = await callPoseAI(currentExercise, extremeAngles, frameDetails, measuredFrames, analysisConfig);
     feedbackDiv.innerHTML = `
             <strong>🤖 AI coach analysis:</strong><br>
             ${marked.parse(aiResponse)}
@@ -3611,9 +3701,13 @@ async function analyzeUploadedVideo() {
         `;
 }
 
-async function callPoseAI(exercise, extremeAngles, frameDetails) {
-    const step = Math.max(1, Math.floor(frameDetails.length / 5));
-    const summarizedFrames = frameDetails.filter((_, i) => i % step === 0).slice(0, 5).join('\n');
+async function callPoseAI(exercise, extremeAngles, frameDetails, measuredFrames, analysisConfig = getPoseAnalysisConfig('balanced')) {
+    const summaryFrameCount = Math.min(analysisConfig.summaryFrameCount, frameDetails.length);
+    const summarizedFrames = [];
+    for (let i = 0; i < summaryFrameCount; i++) {
+        const idx = Math.round((i * (frameDetails.length - 1)) / Math.max(1, summaryFrameCount - 1));
+        summarizedFrames.push(frameDetails[idx]);
+    }
 
     let specificGuidance = '';
     if (exercise === 'deadlift') {
@@ -3641,8 +3735,13 @@ Analyze this trajectory data:
 [MOVEMENT EXTREMES (Min/Max degrees)]
 ${JSON.stringify(extremeAngles, null, 2)}
 
-[SAMPLE TRAJECTORY (5 key frames)]
-${summarizedFrames}
+[DATA QUALITY]
+- Reliable measured frames: ${measuredFrames.length}
+- Summary frame count: ${summaryFrameCount}
+- Note: minTime/maxTime are the only trusted timestamps for extrema.
+
+[SAMPLE TRAJECTORY (key frames spanning full video)]
+${summarizedFrames.join('\n')}
 
 [BIOMECHANICAL STANDARDS]
 ${specificGuidance}
@@ -3652,6 +3751,8 @@ ${specificGuidance}
 2. Give actionable cues (2 bullet points) to fix the most important issue.
 3. If the data suggests injury risk (e.g., flared elbows, stiff-leg deadlift), include a safety warning.
 4. If data is insufficient or noisy, state that clearly.
+5. Keep the response concise (about ${analysisConfig.responseWordRange} words).
+6. Do NOT claim "bottom/top occurs at Xs" unless that exact time appears in minTime/maxTime fields.
 
 [OUTPUT FORMAT (Strictly Markdown)]
 **🔍 Form Analysis:** (What the data says about their lift)
@@ -3677,11 +3778,19 @@ ${specificGuidance}
 function initPoseCoach() {
     const btn = document.getElementById('analyzeVideoBtn');
     const sel = document.getElementById('exerciseSelect');
+    const modeSel = document.getElementById('poseAnalysisMode');
     if (btn) {
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
         newBtn.addEventListener('click', analyzeUploadedVideo);
     }
     if (sel) sel.addEventListener('change', e => currentExercise = e.target.value);
+    if (modeSel) {
+        currentPoseAnalysisMode = modeSel.value || 'balanced';
+        modeSel.addEventListener('change', e => {
+            currentPoseAnalysisMode = e.target.value || 'balanced';
+            showNotification(`Pose analysis mode: ${currentPoseAnalysisMode}`, 'info');
+        });
+    }
     console.log('✅ Pose Coach initialized (TF.js MoveNet)');
 }

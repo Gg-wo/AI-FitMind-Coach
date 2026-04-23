@@ -611,7 +611,22 @@
             showLoading();
             
             try {
+                if (window.AndroidAuth && typeof window.AndroidAuth.signInWithGoogle === 'function') {
+                    window.AndroidAuth.signInWithGoogle();
+                    return;
+                }
+
                 const provider = new firebase.auth.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+
+                // Google OAuth in embedded WebView is more reliable with redirect than popup.
+                const isAndroidWebView = /wv|Android/i.test(navigator.userAgent || '');
+
+                if (isAndroidWebView) {
+                    await auth.signInWithRedirect(provider);
+                    return;
+                }
+
                 await auth.signInWithPopup(provider);
                 localStorage.removeItem('fitmind_guest_mode');
                 showMessage('Sign in successful! Redirecting...', 'success');
@@ -620,9 +635,81 @@
                 }, 1500);
             } catch (error) {
                 hideLoading();
-                if (error.code !== 'auth/popup-closed-by-user') {
-                    showMessage('Google sign in failed. Please try again.', 'error');
+                if (error.code === 'auth/popup-closed-by-user') {
+                    return;
                 }
+
+                let errorMessage = 'Google sign in failed. Please try again.';
+
+                if (error.code === 'auth/unauthorized-domain') {
+                    errorMessage = 'Google sign in failed: unauthorized domain. Add your auth domain in Firebase Authentication settings.';
+                } else if (error.code === 'auth/operation-not-allowed') {
+                    errorMessage = 'Google sign in is not enabled in Firebase Authentication.';
+                } else if (String(error.message || '').toLowerCase().includes('disallowed_useragent')) {
+                    errorMessage = 'Google sign in is blocked in embedded WebView. Please use the app\'s native Google sign in.';
+                } else if (error.code === 'auth/invalid-credential' || String(error.message || '').toLowerCase().includes('invalid')) {
+                    errorMessage = 'Google sign in request is invalid. Check OAuth client and authorized domains in Firebase Console.';
+                }
+
+                console.error('Google sign in error:', error);
+                showMessage(errorMessage, 'error');
+            }
+        }
+
+        window.onNativeGoogleSignInSuccess = async function(idToken, email) {
+            if (!window.auth) {
+                hideLoading();
+                showMessage('Firebase not configured. Please check firebase-config.js', 'error');
+                return;
+            }
+
+            try {
+                const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+                await auth.signInWithCredential(credential);
+                localStorage.removeItem('fitmind_guest_mode');
+                showMessage('Sign in successful! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1200);
+            } catch (error) {
+                hideLoading();
+                console.error('Native Google sign in credential error:', error);
+                showMessage('Google sign in failed while connecting to Firebase. Please try again.', 'error');
+            }
+        };
+
+        window.onNativeGoogleSignInError = function(errorMessage) {
+            hideLoading();
+            const text = errorMessage || 'Native Google sign in failed. Please try again.';
+            showMessage(text, 'error');
+        };
+
+        async function processGoogleRedirectResult() {
+            if (!window.auth) return;
+
+            try {
+                const result = await auth.getRedirectResult();
+                if (result && result.user) {
+                    localStorage.removeItem('fitmind_guest_mode');
+                    showMessage('Sign in successful! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 1200);
+                }
+            } catch (error) {
+                hideLoading();
+                let errorMessage = 'Google sign in failed. Please try again.';
+
+                if (error.code === 'auth/unauthorized-domain') {
+                    errorMessage = 'Google sign in failed: unauthorized domain. Add your auth domain in Firebase Authentication settings.';
+                } else if (error.code === 'auth/operation-not-allowed') {
+                    errorMessage = 'Google sign in is not enabled in Firebase Authentication.';
+                } else if (error.code === 'auth/invalid-credential' || String(error.message || '').toLowerCase().includes('invalid')) {
+                    errorMessage = 'Google sign in request is invalid. Check OAuth client and authorized domains in Firebase Console.';
+                }
+
+                console.error('Google redirect sign in error:', error);
+                showMessage(errorMessage, 'error');
             }
         }
         
@@ -641,6 +728,7 @@
             console.log('✅ Guest mode detected, redirecting to app...');
             window.location.href = 'index.html';
         } else if (window.auth) {
+            processGoogleRedirectResult();
             auth.onAuthStateChanged(user => {
                 // Only redirect if user is signed in AND we're not in signup process
                 if (user && !isSigningUp) {

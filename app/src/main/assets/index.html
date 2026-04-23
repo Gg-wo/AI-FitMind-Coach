@@ -109,6 +109,9 @@
                         </label>
                         <span id="hrSourceStatus" style="font-size: 12px; color: var(--text-muted);">(Simulated data)</span>
                     </div>
+                    <button type="button" onclick="injectMockHrData()" style="margin-top: 8px; font-size: 12px; padding: 4px 8px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        💉 Insert data to health connect (For Testing)
+                    </button>
                     <button id="startBtn" onclick="startWorkout()">Start Session</button>
                     <button id="stopBtn" onclick="stopWorkout()" style="display: none;" class="danger">Stop Session</button>
                 </div>
@@ -375,6 +378,11 @@
                         <option value="barbell_bench_press">🏋️ Barbell Bench Press</option>
                         <option value="squat">🏋️ Squat</option>
                         <option value="deadlift">🏋️ Deadlift</option>
+                    </select>
+                    <select id="poseAnalysisMode" title="Pose analysis mode">
+                        <option value="fast">⚡ Fast</option>
+                        <option value="balanced" selected>⚖️ Balanced</option>
+                        <option value="accurate">🎯 Accurate</option>
                     </select>
                     <input type="file" id="videoUpload" accept="video/*">
                     <button id="analyzeVideoBtn" >🔍 Analyze with AI</button>

@@ -20,6 +20,14 @@ const HealthConnectManager = (function() {
         }
     }
 
+    function requestPermissionsIfNeeded() {
+        if (!checkAvailability()) {
+            return false;
+        }
+        requestPermissions();
+        return true;
+    }
+
     function fetchLatestHeartRate() {
         return new Promise((resolve, reject) => {
             if (!window.AndroidHealth) {
@@ -59,6 +67,7 @@ const HealthConnectManager = (function() {
         useRealData = enabled;
         if (useRealData) {
             if (checkAvailability()) {
+                requestPermissions();
                 startRealTimeMonitoring(callback);
             } else {
                 console.warn('Health Connect not available, cannot use real data');
@@ -72,6 +81,26 @@ const HealthConnectManager = (function() {
     function isRealDataEnabled() {
         return useRealData;
     }
+
+    // 新增呢個 function 畀個掣 call
+    function injectMockHrData() {
+        if (window.AndroidHealth && window.AndroidHealth.checkAvailability()) {
+            const callbackId = 'mock_' + Date.now();
+            // 提提你：要確保已經 request 咗 permission 先禁！
+            window.AndroidHealth.injectMockData(callbackId);
+        } else {
+            alert("Health Connect not available");
+        }
+    }
+
+    // 畀 Android call 返轉頭嘅 callback
+    window.onMockDataInjected = function(success, message, callbackId) {
+        if (success) {
+            alert("✅ 成功隊咗假 data 入 Health Connect！而家你可以剔 Use Real Heart Rate 試吓。");
+        } else {
+            alert("❌ 寫入失敗: " + message + "\n(請確認有冇比 Write 權限)");
+        }
+    };
 
     // for android to call
     window.onHeartRateUpdate = function(heartRate, callbackId) {
@@ -104,7 +133,9 @@ const HealthConnectManager = (function() {
         requestPermissions,
         fetchLatestHeartRate,
         setUseRealData,
+        requestPermissionsIfNeeded,
         isRealDataEnabled,
-        stopRealTimeMonitoring
+        stopRealTimeMonitoring,
+        injectMockHrData
     };
 })();

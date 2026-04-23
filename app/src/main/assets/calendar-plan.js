@@ -10,14 +10,68 @@ window.trainingPlanData = window.trainingPlanData || {};
 function formatDateKey(date) {
     return `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`;
 }
-function saveTrainingPlanData() {
-    localStorage.setItem('fitmind_training_plan_data', JSON.stringify(window.trainingPlanData));
+function getTrainingPlanStorageKey() {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        return `fitmind_training_plan_data_${window.auth.currentUser.uid}`;
+    }
+    return 'fitmind_training_plan_data';
 }
+
+function saveTrainingPlanData(options = {}) {
+    const { suppressCloudSync = false } = options;
+    localStorage.setItem(getTrainingPlanStorageKey(), JSON.stringify(window.trainingPlanData));
+
+    if (!suppressCloudSync && window.firebaseSync && typeof window.firebaseSync.debouncedSyncToCloud === 'function') {
+        window.firebaseSync.debouncedSyncToCloud();
+    }
+}
+
 function loadTrainingPlanData() {
-    const saved = localStorage.getItem('fitmind_training_plan_data');
+    const saved = localStorage.getItem(getTrainingPlanStorageKey());
     if (saved) {
         try { window.trainingPlanData = JSON.parse(saved); } catch(e) { window.trainingPlanData = {}; }
-    } else { window.trainingPlanData = {}; saveTrainingPlanData(); }
+    } else { window.trainingPlanData = {}; saveTrainingPlanData({ suppressCloudSync: true }); }
+}
+
+function applyTrainingPlanFromCloud(cloudTrainingPlan) {
+    if (!cloudTrainingPlan || typeof cloudTrainingPlan !== 'object') {
+        return;
+    }
+
+    window.trainingPlanData = cloudTrainingPlan;
+    saveTrainingPlanData({ suppressCloudSync: true });
+
+    if (document.getElementById('calendarContainer')) {
+        renderCalendar();
+    }
+
+    if (currentEditingDateKey && window.trainingPlanData[currentEditingDateKey] && document.getElementById('planDetailContainer').style.display === 'block') {
+        renderDayDetail(window.trainingPlanData[currentEditingDateKey]);
+    }
+}
+
+async function refreshTrainingPlanFromCloud() {
+    if (!window.firebaseSync || typeof window.firebaseSync.loadTrainingPlanFromCloud !== 'function') {
+        return;
+    }
+
+    try {
+        const cloudTrainingPlan = await window.firebaseSync.loadTrainingPlanFromCloud();
+        if (cloudTrainingPlan && typeof cloudTrainingPlan === 'object') {
+            applyTrainingPlanFromCloud(cloudTrainingPlan);
+        }
+    } catch (error) {
+        console.warn('⚠️ Failed to refresh training plan from cloud:', error);
+    }
+}
+
+function reloadTrainingPlanForCurrentUser() {
+    loadTrainingPlanData();
+    if (document.getElementById('calendarContainer')) {
+        renderCalendar();
+    }
+
+    refreshTrainingPlanFromCloud();
 }
 function getDayName(dateKey) {
     const date = new Date(dateKey);
@@ -62,107 +116,28 @@ function showPrompt(message, defaultValue = '') {
     });
 }
 
-// ---------- User profile management (with GUI modal) ----------
+// ---------- User profile source (reuses Settings > Profile data) ----------
 async function getUserProfile() {
-    let profile = localStorage.getItem('fitmind_user_profile');
-    if (profile) {
-        try {
-            profile = JSON.parse(profile);
-            if (profile.weight && profile.height && profile.gender && profile.level) return profile;
-        } catch(e) {}
+    const rawProfile = (typeof getLocalProfile === 'function' ? getLocalProfile() : null)
+        || (typeof getDefaultProfile === 'function' ? getDefaultProfile() : {});
+
+    const weight = Number(rawProfile.weight) || null;
+    const height = Number(rawProfile.height) || null;
+    const gender = (rawProfile.sex || '').toLowerCase() || null;
+    const levelRaw = (rawProfile.fitnessLevel || '').toLowerCase();
+    const validLevels = ['beginner', 'intermediate', 'advanced'];
+    const level = validLevels.includes(levelRaw) ? levelRaw : 'intermediate';
+
+    if (!weight || !height || !gender) {
+        showAlert('Please complete your body data in Settings > Profile first. Using defaults for now.');
     }
-    return await showEditProfileModal(true);
-}
 
-async function showEditProfileModal(isFirstTime = false) {
-    const current = (() => {
-        const raw = localStorage.getItem('fitmind_user_profile');
-        if (raw) try { return JSON.parse(raw); } catch(e) {}
-        return { weight: 70, height: 175, gender: 'male', level: 'intermediate' };
-    })();
-
-    return new Promise((resolve) => {
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.innerHTML = `
-            <div class="modal-content" style="max-width: 420px;">
-                <div class="modal-header">${isFirstTime ? 'Set Your Body Data' : 'Edit Body Data'}</div>
-                <div style="padding: 16px;">
-                    <div style="margin-bottom: 16px;">
-                        <label>Weight (kg)</label>
-                        <input type="number" id="editWeight" value="${current.weight}" step="1" style="width:100%; margin-top:4px;">
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <label>Height (cm)</label>
-                        <input type="number" id="editHeight" value="${current.height}" step="1" style="width:100%; margin-top:4px;">
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <label>Gender</label>
-                        <div style="display:flex; gap:12px; margin-top:6px;">
-                            <button type="button" id="genderMaleBtn" class="gender-btn ${current.gender === 'male' ? 'active' : ''}">♂ Male</button>
-                            <button type="button" id="genderFemaleBtn" class="gender-btn ${current.gender === 'female' ? 'active' : ''}">♀ Female</button>
-                        </div>
-                    </div>
-                    <div style="margin-bottom: 16px;">
-                        <label>Training Level</label>
-                        <select id="editLevel" style="width:100%; margin-top:4px;">
-                            <option value="beginner" ${current.level === 'beginner' ? 'selected' : ''}>Beginner</option>
-                            <option value="intermediate" ${current.level === 'intermediate' ? 'selected' : ''}>Intermediate</option>
-                            <option value="advanced" ${current.level === 'advanced' ? 'selected' : ''}>Advanced</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button id="profileCancelBtn" class="secondary">Cancel</button>
-                    <button id="profileSaveBtn">Save</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-
-        const weightInput = modal.querySelector('#editWeight');
-        const heightInput = modal.querySelector('#editHeight');
-        const genderMale = modal.querySelector('#genderMaleBtn');
-        const genderFemale = modal.querySelector('#genderFemaleBtn');
-        const levelSelect = modal.querySelector('#editLevel');
-        let selectedGender = current.gender;
-
-        const updateGenderUI = () => {
-            genderMale.classList.toggle('active', selectedGender === 'male');
-            genderFemale.classList.toggle('active', selectedGender === 'female');
-        };
-        genderMale.onclick = () => { selectedGender = 'male'; updateGenderUI(); };
-        genderFemale.onclick = () => { selectedGender = 'female'; updateGenderUI(); };
-        updateGenderUI();
-
-        const save = () => {
-            const weight = parseFloat(weightInput.value);
-            const height = parseFloat(heightInput.value);
-            if (isNaN(weight) || isNaN(height)) {
-                showAlert('Please enter valid numbers.');
-                return;
-            }
-            const profile = {
-                weight, height,
-                gender: selectedGender,
-                level: levelSelect.value,
-                updatedAt: new Date().toISOString()
-            };
-            localStorage.setItem('fitmind_user_profile', JSON.stringify(profile));
-            modal.remove();
-            resolve(profile);
-        };
-        modal.querySelector('#profileSaveBtn').onclick = save;
-        modal.querySelector('#profileCancelBtn').onclick = () => { modal.remove(); resolve(null); };
-    });
-}
-
-async function updateUserProfile() {
-    const newProfile = await showEditProfileModal(false);
-    if (newProfile) {
-        showAlert('Profile updated.');
-        renderCalendar();
-    }
+    return {
+        weight: weight || 70,
+        height: height || 175,
+        gender: gender || 'male',
+        level
+    };
 }
 
 // ---------- JSON extraction ----------
@@ -233,10 +208,8 @@ async function showDayDetail(dateKey) {
     }
     const aiGenBtn = document.getElementById('aiGenerateWeekPlanBtn');
     const copyBtn = document.getElementById('copyToNextWeekBtn');
-    const profileBtn = document.getElementById('editProfileBtn');
     if (aiGenBtn) aiGenBtn.style.display = 'none';
     if (copyBtn) copyBtn.style.display = 'none';
-    if (profileBtn) profileBtn.style.display = 'none';
     renderDayDetail(dayPlan);
 }
 
@@ -315,10 +288,8 @@ function closeDayDetail() {
     renderCalendar();
     const aiGenBtn = document.getElementById('aiGenerateWeekPlanBtn');
     const copyBtn = document.getElementById('copyToNextWeekBtn');
-    const profileBtn = document.getElementById('editProfileBtn');
     if (aiGenBtn) aiGenBtn.style.display = 'inline-block';
     if (copyBtn) copyBtn.style.display = 'inline-block';
-    if (profileBtn) profileBtn.style.display = 'inline-block';
 }
 
 // ---------- Strength operations ----------
@@ -696,6 +667,7 @@ function nextMonth() { currentSelectedDate.setMonth(currentSelectedDate.getMonth
 function initTrainingPlanModule() {
     loadTrainingPlanData();
     renderCalendar();
+    refreshTrainingPlanFromCloud();
     const aiGenBtn = document.getElementById('aiGenerateWeekPlanBtn');
     if (aiGenBtn) aiGenBtn.onclick = aiGenerateFullWeek;
     const container = document.querySelector('#plan-tab .card');
@@ -707,14 +679,6 @@ function initTrainingPlanModule() {
         copyBtn.style.marginRight = '10px';
         copyBtn.onclick = copyToNextWeek;
         container.insertBefore(copyBtn, container.querySelector('#calendarContainer'));
-    }
-    if (container && !document.getElementById('editProfileBtn')) {
-        const profileBtn = document.createElement('button');
-        profileBtn.id = 'editProfileBtn';
-        profileBtn.textContent = '✏️ Update Body Data';
-        profileBtn.style.marginTop = '10px';
-        profileBtn.onclick = updateUserProfile;
-        container.insertBefore(profileBtn, container.querySelector('#calendarContainer'));
     }
 }
 
@@ -728,3 +692,6 @@ function clearAllExercises(dateKey) {
         showAlert('All exercises deleted for this day.');
     });
 }
+
+window.reloadTrainingPlanForCurrentUser = reloadTrainingPlanForCurrentUser;
+window.applyTrainingPlanFromCloud = applyTrainingPlanFromCloud;

@@ -100,6 +100,10 @@ function updateUserUI(user) {
     if (typeof refreshProfileFromCloud === 'function') {
         refreshProfileFromCloud();
     }
+
+    if (typeof reloadTrainingPlanForCurrentUser === 'function') {
+        reloadTrainingPlanForCurrentUser();
+    }
     
     // You can add more UI updates here if needed
     console.log(`✅ UI updated for user: ${user.email}`);
@@ -656,9 +660,10 @@ async function syncFromCloud() {
     
     try {
         // Load data from cloud
-        const [cloudWorkouts, cloudChats] = await Promise.all([
+        const [cloudWorkouts, cloudChats, cloudTrainingPlan] = await Promise.all([
             loadWorkoutsFromCloud(),
-            loadChatsFromCloud()
+            loadChatsFromCloud(),
+            loadTrainingPlanFromCloud()
         ]);
         
         // Merge with local data (conflict resolution: keep newer based on timestamp)
@@ -669,11 +674,16 @@ async function syncFromCloud() {
         if (cloudChats.length > 0) {
             mergeChats(cloudChats);
         }
+
+        if (cloudTrainingPlan && typeof cloudTrainingPlan === 'object') {
+            mergeTrainingPlan(cloudTrainingPlan);
+        }
         
         // Push any local-only data to cloud
         await Promise.all([
             syncWorkoutsToCloud(),
-            syncChatsToCloud()
+            syncChatsToCloud(),
+            syncTrainingPlanToCloud()
         ]);
         
         showSyncStatusBanner('synced');
@@ -758,6 +768,80 @@ function mergeChats(cloudChats) {
 }
 
 /**
+ * Merge cloud training plan with local training plan
+ * Strategy: cloud wins after login to keep cross-device consistency
+ */
+function mergeTrainingPlan(cloudTrainingPlan) {
+    if (!cloudTrainingPlan || typeof cloudTrainingPlan !== 'object') {
+        return;
+    }
+
+    if (typeof window.applyTrainingPlanFromCloud === 'function') {
+        window.applyTrainingPlanFromCloud(cloudTrainingPlan);
+    } else {
+        window.trainingPlanData = cloudTrainingPlan;
+    }
+
+    console.log('✅ Merged training plan from cloud');
+}
+
+// ============================================================
+// FIRESTORE SYNC - TRAINING PLAN
+// ============================================================
+
+async function syncTrainingPlanToCloud() {
+    if (!syncEnabled || !currentUser || !window.db) return;
+
+    try {
+        const trainingPlanData = window.trainingPlanData || {};
+        await db.collection('users').doc(currentUser.uid).set({
+            trainingPlanData,
+            trainingPlanUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log('✅ Synced training plan to cloud');
+    } catch (error) {
+        console.error('❌ Error syncing training plan:', error);
+    }
+}
+
+async function loadTrainingPlanFromCloud() {
+    if (!syncEnabled || !currentUser || !window.db) return null;
+
+    try {
+        const doc = await db.collection('users').doc(currentUser.uid).get();
+        if (!doc.exists) return null;
+
+        const data = doc.data();
+        if (!data || !data.trainingPlanData || typeof data.trainingPlanData !== 'object') {
+            return null;
+        }
+
+        console.log('📥 Loaded training plan from cloud');
+        return data.trainingPlanData;
+    } catch (error) {
+        console.error('❌ Error loading training plan:', error);
+        return null;
+    }
+}
+
+async function clearTrainingPlanFromCloud() {
+    if (!syncEnabled || !currentUser || !window.db) return;
+
+    try {
+        await db.collection('users').doc(currentUser.uid).set({
+            trainingPlanData: {},
+            trainingPlanUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log('✅ Cleared training plan from cloud');
+    } catch (error) {
+        console.error('❌ Error clearing training plan from cloud:', error);
+        throw error;
+    }
+}
+
+/**
  * Set up all real-time listeners
  */
 function setupRealtimeListeners() {
@@ -778,7 +862,8 @@ function debouncedSyncToCloud() {
     syncTimeout = setTimeout(async () => {
         await Promise.all([
             syncWorkoutsToCloud(),
-            syncChatsToCloud()
+            syncChatsToCloud(),
+            syncTrainingPlanToCloud()
         ]);
         console.log('🔄 Auto-synced to cloud');
     }, 2000); // Wait 2s after last change
@@ -798,6 +883,9 @@ window.firebaseSync = {
     signOut,
     syncFromCloud,
     debouncedSyncToCloud,
+    syncTrainingPlanToCloud,
+    loadTrainingPlanFromCloud,
+    clearTrainingPlanFromCloud,
     saveUserPreferences,
     loadUserProfile,
     saveUserProfile,

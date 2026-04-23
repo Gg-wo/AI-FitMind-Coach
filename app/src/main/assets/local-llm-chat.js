@@ -62,6 +62,29 @@
         return content;
     }
 
+    function renderWelcomeMessage() {
+        const root = getEl('localLlmMessages');
+        if (!root) return;
+
+        root.innerHTML = `
+            <div class="coach-message">
+                <div class="coach-message-bubble">
+                    <div class="coach-header">
+                        <div class="coach-avatar">🧠</div>
+                        <span>Local Model</span>
+                    </div>
+                    <div class="coach-content">Ask me anything. I run directly on your device using your local model.</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function clearPendingResponses() {
+        Object.keys(pendingResponses).forEach(requestId => {
+            delete pendingResponses[requestId];
+        });
+    }
+
     function setInputEnabled(enabled) {
         const input = getEl('localLlmQuestion');
         if (input) input.disabled = !enabled;
@@ -202,6 +225,19 @@ cannot trigger because i blocked the input if loading and not found
             refreshModelStatus();
             const input = getEl('localLlmQuestion');
             if (input && !input.disabled) input.focus();
+        },
+
+        clearHistory: function () {
+            clearPendingResponses();
+            renderWelcomeMessage();
+
+            const input = getEl('localLlmQuestion');
+            if (input) {
+                input.value = '';
+            }
+
+            refreshModelStatus();
+            tryInitializeModel();
         }
     };
 

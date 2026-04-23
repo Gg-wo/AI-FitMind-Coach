@@ -31,6 +31,9 @@ import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
@@ -41,7 +44,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.*
 import androidx.activity.viewModels
+import androidx.health.connect.client.records.metadata.Metadata
 import org.json.JSONObject
+
 
 class MainActivity : ComponentActivity() {
     private var healthConnectClient: HealthConnectClient? = null
@@ -52,6 +57,35 @@ class MainActivity : ComponentActivity() {
 
     private val chatViewModel: ChatViewModel by viewModels()
     private val localModelFileName = "gemma4_final_q4km.gguf"
+
+    private val googleSignInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data = result.data
+        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+
+            if (idToken.isNullOrBlank()) {
+                dispatchNativeGoogleSignInError("Google sign-in failed: missing idToken")
+                return@registerForActivityResult
+            }
+
+            dispatchNativeGoogleSignInSuccess(idToken, account.email ?: "")
+        } catch (e: ApiException) {
+            Log.e("GoogleSignIn", "Google sign-in failed", e)
+            val readableError = when (e.statusCode) {
+                10 -> "Google sign-in failed (10): Firebase SHA/OAuth config mismatch. Add this app's SHA keys in Firebase and download new google-services.json."
+                12501 -> "Google sign-in canceled by user."
+                7 -> "Google sign-in failed: network error."
+                else -> "Google sign-in failed (${e.statusCode})"
+            }
+            dispatchNativeGoogleSignInError(readableError)
+        } catch (e: Exception) {
+            Log.e("GoogleSignIn", "Unexpected Google sign-in error", e)
+            dispatchNativeGoogleSignInError("Google sign-in failed")
+        }
+    }
 
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (fileUploadCallback == null) return@registerForActivityResult
@@ -128,6 +162,7 @@ class MainActivity : ComponentActivity() {
         this.webView = webView
         webView.addJavascriptInterface(HealthConnectInterface(), "AndroidHealth")
         webView.addJavascriptInterface(LocalLlmInterface(), "AndroidLocalLLM")
+        webView.addJavascriptInterface(AuthInterface(), "AndroidAuth")
         webView.webChromeClient = WebChromeClient()
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -152,12 +187,69 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun checkAvailability(): Boolean = healthConnectClient != null
 
+        // 喺 HealthConnectInterface 入面修改呢個 function：
         @JavascriptInterface
         fun requestPermissions() {
             runOnUiThread {
-                requestPermissionsLauncher.launch(setOf(HealthPermission.getReadPermission(HeartRateRecord::class)))
+                requestPermissionsLauncher.launch(
+                    setOf(
+                        HealthPermission.getReadPermission(HeartRateRecord::class),
+                        HealthPermission.getWritePermission(HeartRateRecord::class) // <-- 加多呢行拎寫入權限
+                    )
+                )
             }
         }
+
+        @JavascriptInterface
+        fun injectMockData(callbackId: String) {
+            if (healthConnectClient == null) {
+                runOnUiThread {
+                    webView.loadUrl("javascript:window.onMockDataInjected(false, 'Client not available', '$callbackId')")
+                }
+                return
+            }
+
+            mainScope.launch {
+                try {
+                    val now = Instant.now()
+                    val records = mutableListOf<HeartRateRecord>()
+
+                    // 幫你 Generate 過去 10 分鐘，每分鐘一筆嘅假心跳數據 (80-120 bpm)
+                    for (i in 0..9) {
+                        val time = now.minus((10 - i).toLong(), ChronoUnit.MINUTES)
+                        val hrValue = (80..120).random().toLong()
+
+                        val record = HeartRateRecord(
+                            startTime = time,
+                            startZoneOffset = java.time.ZoneOffset.UTC,
+                            endTime = time.plusSeconds(30), // 一筆 data 維持 30 秒
+                            endZoneOffset = java.time.ZoneOffset.UTC,
+                            samples = listOf(
+                                HeartRateRecord.Sample(
+                                    time = time,
+                                    beatsPerMinute = hrValue
+                                )
+                            ),
+                            metadata = Metadata.manualEntry()
+                        )
+                        records.add(record)
+                    }
+
+                    // 一次過寫入 Health Connect
+                    healthConnectClient!!.insertRecords(records)
+
+                    runOnUiThread {
+                        webView.loadUrl("javascript:window.onMockDataInjected(true, 'Success', '$callbackId')")
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        webView.loadUrl("javascript:window.onMockDataInjected(false, '${e.message}', '$callbackId')")
+                    }
+                }
+            }
+        }
+
+
         @JavascriptInterface
         fun getLatestHeartRate(callbackId: String) {
             if (healthConnectClient == null) {
@@ -213,6 +305,52 @@ class MainActivity : ComponentActivity() {
                 onComplete = { full -> dispatchLocalLlmComplete(callbackId, full) },
                 onError = { err -> dispatchLocalLlmError(callbackId, err) }
             )
+        }
+    }
+
+    inner class AuthInterface {
+        @JavascriptInterface
+        fun signInWithGoogle() {
+            runOnUiThread {
+                try {
+                    val webClientIdResId = resources.getIdentifier("default_web_client_id", "string", packageName)
+                    val resolvedWebClientId = if (webClientIdResId != 0) getString(webClientIdResId) else ""
+
+                    if (resolvedWebClientId.isBlank()) {
+                        dispatchNativeGoogleSignInError("Google Sign-In is not configured. Missing default_web_client_id.")
+                        return@runOnUiThread
+                    }
+
+                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestIdToken(resolvedWebClientId)
+                        .requestEmail()
+                        .build()
+
+                    val client = GoogleSignIn.getClient(this@MainActivity, gso)
+
+                    // Force account chooser each time for cleaner UX.
+                    client.signOut().addOnCompleteListener {
+                        googleSignInLauncher.launch(client.signInIntent)
+                    }
+                } catch (e: Exception) {
+                    Log.e("GoogleSignIn", "Cannot start Google sign-in", e)
+                    dispatchNativeGoogleSignInError("Cannot start Google sign-in")
+                }
+            }
+        }
+    }
+
+    private fun dispatchNativeGoogleSignInSuccess(idToken: String, email: String) {
+        runOnUiThread {
+            val script = "window.onNativeGoogleSignInSuccess && window.onNativeGoogleSignInSuccess(${toJsString(idToken)}, ${toJsString(email)})"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    private fun dispatchNativeGoogleSignInError(error: String) {
+        runOnUiThread {
+            val script = "window.onNativeGoogleSignInError && window.onNativeGoogleSignInError(${toJsString(error)})"
+            webView.evaluateJavascript(script, null)
         }
     }
 
