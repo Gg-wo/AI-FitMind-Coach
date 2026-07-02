@@ -6,6 +6,21 @@ Initial implementation.
 
 MyApplication is an in-progress project (initial implementation). This repository contains the source code and assets for the project. The codebase currently includes web frontend code (JavaScript, HTML, CSS) and Kotlin code (e.g., Android or Kotlin JVM code). Use this README as a starting point — update the sections below with project-specific details.
 
+## Core function
+
+- Plays back real wearable heart-rate sessions (WESAD dataset) as realistic workout sessions inside the app.
+- Streams heart-rate data point-by-point (≈1 sample/second) to the UI during a workout and updates live metrics: current HR, average HR, duration, chart, and calories burned.
+- Calculates calories using research-backed formulas (Karvonen method + BMR via Mifflin–St Jeor) to produce realistic energy-expenditure estimates.
+- Stores finished sessions in a local history and clearly indicates the research subject / data source for transparency and reproducibility.
+
+## Tech stack
+
+- Frontend: JavaScript, HTML, CSS — the app UI and playback logic live as web assets (app/src/main/assets/).
+- Mobile wrapper: Kotlin (Android) — an Android module loads the web assets in a WebView; project builds with Gradle (Kotlin DSL).
+- Data processing: Python scripts used to convert raw WESAD research files into the processed app JSON (prepare_app_data.py → data.json).
+- Build tools: Gradle wrapper (gradlew) and standard Android tooling; the web assets can be tested in a browser (test_chat.html) as well.
+- Data: WESAD Research Dataset (processed into app/src/main/assets/data.json — ~287.6 KB, 55 sessions).
+
 ## Language composition
 
 - JavaScript: ~51.6%
