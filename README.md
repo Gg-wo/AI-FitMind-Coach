@@ -1,126 +1,67 @@
-# MyApplication
+# 🏃‍♂️ AI-Fit-Coach (Replace with your App Name)
 
-Initial implementation.
+> An intelligent, on-device fitness coaching Android application featuring a Local LLM AI Coach, real-time heart-rate playback, and AI-powered posture detection.
 
-## Overview
+![App Demo Placeholder](link-to-your-awesome-gif.gif)
+*(💡 記得錄 5-10 秒 App 運行 GIF 放喺度！)*
 
-MyApplication is an in-progress project (initial implementation). This repository contains the source code and assets for the project. The codebase currently includes web frontend code (JavaScript, HTML, CSS) and Kotlin code (e.g., Android or Kotlin JVM code). Use this README as a starting point — update the sections below with project-specific details.
+## 🌟 Core Features
 
-## Core function
+* **🧠 On-Device AI Coach (Local LLM):** Features an offline, natural-language chat interface powered by a local GGUF model (Gemma). Supports "thinking" mode and token streaming to generate personalized workout guidance natively on the device.
+* **🧘‍♂️ Real-time Pose & Posture Detection:** Utilizes a client-side Pose Coach (TensorFlow.js + MoveNet) to analyze video/webcam frames. It computes joint angles and provides live form feedback, integrated with the LLM for richer coaching.
+* **🫀 Realistic Heart-Rate Simulation:** Plays back real wearable heart-rate sessions from the WESAD dataset. Streams data point-by-point to update live metrics (Current/Avg HR, duration, dynamic charts).
+* **🔥 Scientific Calorie Tracking:** Calculates energy expenditure using research-backed algorithms, combining the Karvonen method with BMR (Mifflin–St Jeor equation).
 
-- Plays back real wearable heart-rate sessions (WESAD dataset) as realistic workout sessions inside the app.
-- Streams heart-rate data point-by-point (≈1 sample/second) to the UI during a workout and updates live metrics: current HR, average HR, duration, chart, and calories burned.
-- Calculates calories using research-backed formulas (Karvonen method + BMR via Mifflin–St Jeor) to produce realistic energy-expenditure estimates.
-- Stores finished sessions in a local history and clearly indicates the research subject / data source for transparency and reproducibility.
-- Local LLM: includes an on-device chat powered by a local GGUF model (Gemma format) with a web UI and native Kotlin bridge. The model supports "thinking" mode, token streaming, and can be used as an AI coach for natural-language guidance and plan generation. Files: `app/src/main/assets/local-llm-chat.js`, `app/src/main/java/.../ChatViewModel.kt`, `sample_local_llm_history_conversation.json`.
-- Pose / Posture detection: a client-side Pose Coach using TensorFlow.js + MoveNet analyzes uploaded videos (or webcam frames), computes joint angles and form metrics, and returns feedback in the UI; the pose module can be tied into the LLM to produce richer natural-language coaching. Files: `app/src/main/assets/app.js` (Pose Coach module), `index.html` Pose Coach tab.
+## 🛠️ Tech Stack & Architecture
 
-## Tech stack
+This project utilizes a **Hybrid Architecture**, wrapping a complex Web/AI frontend within a native Android module.
 
-- Frontend: JavaScript, HTML, CSS — the app UI and playback logic live as web assets (app/src/main/assets/).
-- Mobile wrapper: Kotlin (Android) — an Android module loads the web assets in a WebView; project builds with Gradle (Kotlin DSL).
-- Data processing: Python scripts used to convert raw WESAD research files into the processed app JSON (prepare_app_data.py → data.json).
-- Build tools: Gradle wrapper (gradlew) and standard Android tooling; the web assets can be tested in a browser (test_chat.html) as well.
-- Data: WESAD Research Dataset (processed into app/src/main/assets/data.json — ~287.6 KB, 55 sessions).
+**Native Android Wrapper:**
+* **Language:** Kotlin
+* **Framework:** Android SDK, WebView integration
+* **Build System:** Gradle (Kotlin DSL)
 
-## Language composition
+**Frontend & AI Engine (Client-Side):**
+* **Core:** JavaScript, HTML5, CSS3
+* **Machine Learning:** TensorFlow.js, MoveNet (Pose Detection)
+* **Local LLM:** Native Kotlin bridge communicating with Web UI for Gemma GGUF model processing.
 
-- JavaScript: ~51.6%
-- HTML: ~18.5%
-- Kotlin: ~17.0%
-- CSS: ~12.9%
+**Data Processing:**
+* **Python:** Used for preprocessing raw WESAD research files into lightweight JSON structures for the app.
 
-## Status
+## 🚀 Getting Started
 
-Work in progress. Expect incomplete features, rough edges, and breaking changes while development continues.
+To run this project locally, you will need Android Studio and Node.js installed.
 
-## Project structure (example)
+### 1. Build the Web Assets
+First, install the web dependencies and build the frontend assets:
 
-- / (repository root)
-  - README.md            - this file
-  - package.json         - (if present) Node/npm project metadata
-  - android/ or app/     - (if present) Kotlin/Android module
-  - src/                 - JavaScript/HTML/CSS frontend source
-  - web/                 - static web content
+```bash
+# Navigate to the web frontend directory
+npm install
+npm run build
+```
 
-Adjust the structure above to reflect the actual layout of this repository.
+### 2. Run the Android App
+Open the project in Android Studio.
 
-## Getting started
+- Sync Project with Gradle Files.
+- Build and run on a physical Android device (Recommended for Local LLM and Camera performance) or an emulator.
 
-Follow these general steps to run or develop the project locally. Replace or remove steps that do not apply.
+Alternatively, use the command line:
 
-Prerequisites
+```bash
+# Build and install debug on a connected device/emulator
+./gradlew assembleDebug
+./gradlew installDebug
+```
 
-- Node.js (v14+) and npm or yarn — for JavaScript/web parts
-- Java 11+ and Android Studio/Gradle — for Kotlin/Android parts (if applicable)
+## Project Structure Overview
 
-Run the web frontend (if applicable)
+- `app/src/main/java/.../` - Native Kotlin Android code (e.g., ChatViewModel.kt, WebView bridge).
+- `app/src/main/assets/` - Compiled web assets, Local LLM chat logic (`local-llm-chat.js`), Pose Coach module (`app.js`), and processed WESAD data.
+- `prepare_app_data.py` - Python script for dataset processing.
 
-1. Install dependencies:
+---
 
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-2. Start the dev server:
-
-   ```bash
-   npm start
-   # or
-   yarn start
-   ```
-
-3. Build for production:
-
-   ```bash
-   npm run build
-   # or
-   yarn build
-   ```
-
-Run Kotlin/Android module (if applicable)
-
-1. Open the Android/Kotlin module in Android Studio.
-2. Build and run on an emulator or device.
-3. Or use Gradle on the command line:
-
-   ```bash
-   ./gradlew assembleDebug
-   ./gradlew installDebug
-   ```
-
-Running tests
-
-- JavaScript: `npm test` or `yarn test` (if test scripts are defined)
-- Kotlin: `./gradlew test` (if Gradle is configured)
-
-## Development workflow
-
-- Create a feature branch: `git checkout -b feat/my-feature`
-- Commit changes with clear messages
-- Open a pull request against the repository's default branch for review
-
-## Contributing
-
-Contributions are welcome. Please open an issue to discuss significant changes before implementing them. Follow these guidelines:
-
-- Keep commits small and focused
-- Write tests for new features when possible
-- Update this README with any new setup steps or architectural notes
-
-## TODO / Roadmap
-
-- Clarify the repository structure in this README
-- Add build and run commands for each module
-- Add unit/integration tests
-- Add CI configuration and code style checks
-
-## License
-
-If you have a preferred license, add a LICENSE file at the repository root (for example, MIT). Until a license is added, assume the project has no explicit open-source license.
-
-## Contact
-
-If you have questions, open an issue or contact the repository maintainer.
+手足，我已經準備好要將呢個 README.md 更新到你嘅 repository。要我幫你把它 commit 上去嗎？
