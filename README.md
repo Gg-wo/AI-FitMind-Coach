@@ -12,6 +12,8 @@ MyApplication is an in-progress project (initial implementation). This repositor
 - Streams heart-rate data point-by-point (≈1 sample/second) to the UI during a workout and updates live metrics: current HR, average HR, duration, chart, and calories burned.
 - Calculates calories using research-backed formulas (Karvonen method + BMR via Mifflin–St Jeor) to produce realistic energy-expenditure estimates.
 - Stores finished sessions in a local history and clearly indicates the research subject / data source for transparency and reproducibility.
+- Local LLM: includes an on-device chat powered by a local GGUF model (Gemma format) with a web UI and native Kotlin bridge. The model supports "thinking" mode, token streaming, and can be used as an AI coach for natural-language guidance and plan generation. Files: `app/src/main/assets/local-llm-chat.js`, `app/src/main/java/.../ChatViewModel.kt`, `sample_local_llm_history_conversation.json`.
+- Pose / Posture detection: a client-side Pose Coach using TensorFlow.js + MoveNet analyzes uploaded videos (or webcam frames), computes joint angles and form metrics, and returns feedback in the UI; the pose module can be tied into the LLM to produce richer natural-language coaching. Files: `app/src/main/assets/app.js` (Pose Coach module), `index.html` Pose Coach tab.
 
 ## Tech stack
 
