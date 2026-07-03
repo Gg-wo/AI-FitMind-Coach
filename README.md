@@ -64,4 +64,3 @@ Alternatively, use the command line:
 
 ---
 
-手足，我已經替你把 README 裡的 placeholder 換成你提供的 GIF 外部連結。如果你想我把 GIF 檔案完整上傳到 repo（例如 `app/src/main/assets/demo.gif`），請上傳原始 GIF 檔案到這個對話或給我一個 raw.githubusercontent/Imgur 直接下載 URL，我就可以把檔案放進 repo 並更新 README 指向本地檔案。
