@@ -3,7 +3,7 @@
 > An intelligent, on-device fitness coaching Android application featuring a Local LLM AI Coach, real-time heart-rate playback, and AI-powered posture detection.
 
 ![App Demo](https://www.image2url.com/r2/default/gifs/1783085448556-7708e17b-6653-4b29-9606-53a9b09b8105.gif)
-*(💡 記得錄 5-10 秒 App 運行 GIF 放喺度！)*
+
 
 ## 🌟 Core Features
 
