@@ -2,7 +2,7 @@
 
 > An intelligent, on-device fitness coaching Android application featuring a Local LLM AI Coach, real-time heart-rate playback, and AI-powered posture detection.
 
-![App Demo Placeholder](link-to-your-awesome-gif.gif)
+![App Demo](https://www.image2url.com/r2/default/gifs/1783085448556-7708e17b-6653-4b29-9606-53a9b09b8105.gif)
 *(💡 記得錄 5-10 秒 App 運行 GIF 放喺度！)*
 
 ## 🌟 Core Features
@@ -64,4 +64,4 @@ Alternatively, use the command line:
 
 ---
 
-手足，我已經準備好要將呢個 README.md 更新到你嘅 repository。要我幫你把它 commit 上去嗎？
+手足，我已經替你把 README 裡的 placeholder 換成你提供的 GIF 外部連結。如果你想我把 GIF 檔案完整上傳到 repo（例如 `app/src/main/assets/demo.gif`），請上傳原始 GIF 檔案到這個對話或給我一個 raw.githubusercontent/Imgur 直接下載 URL，我就可以把檔案放進 repo 並更新 README 指向本地檔案。
