@@ -1,4 +1,4 @@
-# 🏃‍♂️ AI-Fit-Coach (Replace with your App Name)
+# 🏃‍♂️ AI-Fit-Coach
 
 > An intelligent, on-device fitness coaching Android application featuring a Local LLM AI Coach, real-time heart-rate playback, and AI-powered posture detection.
 
